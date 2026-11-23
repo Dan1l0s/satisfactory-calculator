@@ -18,6 +18,8 @@ import {
   pinnedResourceItems,
 } from './recipe-policy.js';
 import { normalizeRecipeMode } from './recipe-mode.js';
+import { comparePlans, currentProductionForOutput, recipeForOutput } from './plan-comparison.js';
+import { renderPlanDelta, renderRecipeRates } from './comparison-view.js';
 import {
   getResourceWeights,
   getResourceWeightDetails,
@@ -97,6 +99,7 @@ const defaultState = () => ({
   minerClock: 100,
   imports: [],
   language: 'both',
+  compactGraph: false,
 });
 let data,
   itemMap,
@@ -250,6 +253,7 @@ function normalizeState(raw, { source = 'json' } = {}) {
   s.pipeTier = PIPE_TIERS.some((t) => t.tier === Number(raw.pipeTier)) ? Number(raw.pipeTier) : 2;
   s.defaultPurity = [0.5, 1, 2].includes(Number(raw.defaultPurity)) ? Number(raw.defaultPurity) : 1;
   s.language = ['both', 'ru', 'en', 'en-ru'].includes(raw.language) ? raw.language : 'both';
+  s.compactGraph = raw.compactGraph === true;
   if (raw.resourceSettings && typeof raw.resourceSettings === 'object')
     for (const r of data.resources) {
       const source = raw.resourceSettings[r.itemId];
@@ -525,6 +529,8 @@ function renderControls() {
   $('resource-conversions').checked = state.resourceConversions;
   $('resource-conversions').disabled = !state.alternateModeChosen;
   $('language').value = state.language;
+  $('graph-detail').value = state.compactGraph ? 'compact' : 'full';
+  graph.setCompact(state.compactGraph);
   $('miner-tier').value = state.minerTier;
   $('default-purity').value = state.defaultPurity;
   const belt = BELT_TIERS.find((t) => t.tier === state.beltTier),
@@ -656,6 +662,16 @@ function openRecipeChoice(itemId) {
   recipeChoiceItem = itemId;
   openSettings('recipe-choice');
 }
+function comparisonFormat() {
+  return { num, esc, unit, itemIcon, dual, itemMap };
+}
+function comparisonDeltaLabel(change, suffix = '') {
+  if (!change || change.delta === 0)
+    return '<span class="comparison-change unchanged">Без изменений</span>';
+  const sign = change.delta < 0 ? '−' : '+';
+  const percent = change.percent === null ? 'новый расход' : `${sign}${num(Math.abs(change.percent), 1)}%`;
+  return `<span class="comparison-change ${change.delta < 0 ? 'less' : 'more'}">${sign}${num(Math.abs(change.delta))}${suffix ? ` ${esc(suffix)}` : ''} / ${percent}</span>`;
+}
 async function renderRecipeChoice() {
   const itemId = recipeChoiceItem,
     item = itemMap.get(itemId);
@@ -669,17 +685,39 @@ async function renderRecipeChoice() {
     );
   const generation = ++recipeChoiceGeneration,
     current = result?.status === 'optimal' ? result : null;
+  const primaryRate = (current?.recipes || []).reduce((total, row) => {
+    const recipe = recipeMap.get(row.recipeId);
+    return total + (recipe && primaryProduct(recipe) === itemId ? row.outputs[itemId] || 0 : 0);
+  }, 0);
+  const balance = current?.balance?.[itemId];
+  const outputRate = primaryRate > 1e-6
+    ? primaryRate
+    : (balance?.consumed || 0) + (balance?.target || 0) || 1;
+  const baseRecipe = candidates.find((recipe) => !recipe.alternate && !recipe.conversion);
+  const currentReference = currentProductionForOutput(data, current, itemId, outputRate);
+  const reference = currentReference || (baseRecipe ? recipeForOutput(baseRecipe, itemId, outputRate) : null);
+  const referenceLabel = currentReference ? 'Сейчас' : 'Базовый рецепт';
+  const format = comparisonFormat();
   const criterion = {
     resources: 'ресурсному индексу',
     energy: 'потреблению энергии',
     buildings: 'количеству зданий',
   }[state.objective];
   $('settings-body').innerHTML =
-    `<p class="settings-intro">Сравниваем <strong>весь план</strong> по ${criterion} с учётом открытых рецептов, лимитов и ваших весов сырья. Выбранный способ закрепится для основного производства этого предмета; побочные продукты сохранятся</p><div class="recipe-choice-toolbar"><button class="button small ghost" data-clear-recipe-choice="${esc(itemId)}">Автовыбор оптимизатора</button><button class="text-button" data-open-resources>Изменить цену сырья</button></div><div id="recipe-candidate-list" class="recipe-candidate-list">${candidates
+    `<p class="settings-intro">Показываем, что изменится во <strong>всём плане</strong> после выбора рецепта: сырьё, мощность и здания. Лучший вариант определяется по ${criterion}</p>
+    <div class="recipe-choice-toolbar"><button class="button small ghost" data-clear-recipe-choice="${esc(itemId)}">Автовыбор оптимизатора</button><button class="text-button" data-open-resources>Изменить цену сырья</button></div>
+    <div class="recipe-comparison-basis"><strong>Одинаковый выпуск для сравнения состава: ${num(outputRate)} ${unit(itemId)}</strong><span>${esc(itemName(itemId))} / Ингредиенты масштабированы на один и тот же выпуск, нормы одной машины указаны отдельно</span></div>
+    <div id="recipe-candidate-list" class="recipe-candidate-list">${candidates
       .map((r) => {
         const permission = recipePermission(r, state),
           unavailable = !permission.unlocked || (r.seasonal && !state.seasonal);
-        return `<article class="recipe-candidate" data-candidate="${esc(r.id)}"><div class="used-alternate-heading">${itemIcon(buildingMap.get(r.buildingId))}${dual(r)}${r.alternate ? '<span class="alternate-badge">ALT</span>' : r.conversion ? '<span class="status-tag conversion-tag">СЫРЬЁ → СЫРЬЁ</span>' : ''}</div><p class="helper">На одно здание: ${flowList(r.inputs)} → ${flowList(r.outputs)}</p><div class="candidate-result">${unavailable ? esc(permission.reason) : '<span class="spinner"></span> Считаем вариант…'}</div><button class="button small ${state.recipeOverrides[itemId] === r.id ? 'subtle' : 'ghost'}" data-pin-recipe="${esc(r.id)}" data-pin-item="${esc(itemId)}" disabled>${state.recipeOverrides[itemId] === r.id ? 'Выбран вручную' : permission.manuallyDisabled ? 'Разрешить и использовать' : 'Использовать этот рецепт'}</button></article>`;
+        const used = current?.recipes.some((row) => row.recipeId === r.id);
+        return `<article class="recipe-candidate" data-candidate="${esc(r.id)}">
+          <div class="used-alternate-heading"><div class="paired-icons">${itemIcon(item)}${itemIcon(buildingMap.get(r.buildingId))}</div>${dual(r)}${r.alternate ? '<span class="alternate-badge">ALT</span>' : r.conversion ? '<span class="status-tag conversion-tag">СЫРЬЁ → СЫРЬЁ</span>' : ''}${used ? '<span class="status-tag">СЕЙЧАС В ПЛАНЕ</span>' : ''}</div>
+          <div class="candidate-result" aria-live="polite">${unavailable ? esc(permission.reason) : isSolving ? 'Дождитесь расчёта плана и откройте сравнение снова' : '<span class="spinner"></span> Считаем изменения всего плана…'}</div>
+          <button class="button ${state.recipeOverrides[itemId] === r.id ? 'subtle' : 'ghost'}" data-pin-recipe="${esc(r.id)}" data-pin-item="${esc(itemId)}" disabled>${state.recipeOverrides[itemId] === r.id ? 'Выбран вручную' : permission.manuallyDisabled ? 'Разрешить и использовать' : 'Использовать этот рецепт'}</button>
+          ${renderRecipeRates({ recipe: r, itemId, outputRate, reference, referenceLabel, format })}
+        </article>`;
       })
       .join(
         '',
@@ -721,34 +759,8 @@ async function renderRecipeChoice() {
       }
       outcomes.push({ id: recipe.id, value: objectiveValue(next), card });
       card.querySelector('[data-pin-recipe]').disabled = false;
-      const difference = current ? objectiveValue(next) - objectiveValue(current) : 0,
-        delta = !current
-          ? 'Выполнимый вариант'
-          : Math.abs(difference) < 1e-5
-            ? 'Без изменения цели'
-            : `${difference > 0 ? '+' : '−'}${num(Math.abs(difference), 2)} к текущей цели`;
-      const changes = next.resources
-        .map((r) => ({
-          id: r.item,
-          delta: r.rate - (current?.resources.find((x) => x.item === r.item)?.rate || 0),
-        }))
-        .filter((x) => Math.abs(x.delta) > 0.005);
-      for (const row of current?.resources || [])
-        if (!next.resources.some((r) => r.item === row.item) && row.rate > 0.005)
-          changes.push({ id: row.item, delta: -row.rate });
-      changes.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
       card.querySelector('.candidate-result').innerHTML =
-        `<div class="candidate-metrics"><span>Ресурсы<strong>${num(next.totals.weightedResources, 1)}</strong></span><span>МВт<strong>${num(next.totals.powerMW, 1)}</strong></span><span>Здания<strong>${num(next.totals.machines, 2)}</strong></span></div><p class="candidate-delta ${difference < -1e-5 ? 'positive' : ''}">${delta}</p>${
-          changes.length
-            ? `<p class="helper">${changes
-                .slice(0, 5)
-                .map(
-                  (c) =>
-                    `${esc(itemName(c.id))}: ${c.delta > 0 ? '+' : '−'}${num(Math.abs(c.delta))} ${unit(c.id)}`,
-                )
-                .join(' / ')}${changes.length > 5 ? ' / …' : ''}</p>`
-            : '<p class="helper">Состав сырья не меняется</p>'
-        }`;
+        renderPlanDelta({ current, next, objective: state.objective, format });
     } catch (error) {
       if (generation !== recipeChoiceGeneration) return;
       if (card?.isConnected)
@@ -765,7 +777,7 @@ async function renderRecipeChoice() {
           .querySelector('.candidate-result')
           .insertAdjacentHTML(
             'afterbegin',
-            '<span class="status-tag in-plan-tag">ЛУЧШИЙ ИЗ ЭТИХ ВАРИАНТОВ</span>',
+            `<span class="status-tag in-plan-tag">ЛУЧШИЙ ПО ${esc({ resources: 'РЕСУРСНОМУ ИНДЕКСУ', energy: 'ЭНЕРГИИ', buildings: 'ЧИСЛУ ЗДАНИЙ' }[state.objective])} СРЕДИ ЭТИХ ВАРИАНТОВ</span>`,
           );
       }
   }
@@ -887,7 +899,8 @@ async function renderComparison(force = false) {
     $('comparison-cards').innerHTML = modes
       .map((mode) => {
         const r = comparisonCache[mode];
-        return `<section class="comparison-card ${mode === state.objective ? 'selected' : ''}"><h3>${icon(symbols[mode])}${titles[mode]}</h3><p class="helper">${description[mode]}</p>${r?.status === 'optimal' ? `<div class="comparison-value"><span>Ресурсный индекс</span><strong>${num(r.totals.weightedResources, 1)}</strong></div><div class="comparison-value"><span>Энергия, МВт</span><strong>${num(r.totals.powerMW, 1)}</strong></div><div class="comparison-value"><span>Зданий</span><strong>${num(r.totals.machines, 2)}</strong></div><div class="comparison-value"><span>Рецептов / альтернатив</span><strong>${r.recipes.length} / ${r.recipes.filter((x) => recipeMap.get(x.recipeId)?.alternate).length}</strong></div><button class="button ${mode === state.objective ? 'subtle' : 'ghost'}" data-apply-mode="${mode}" ${mode === state.objective ? 'disabled' : ''}>${mode === state.objective ? 'Текущий план' : 'Применить этот план'}</button>` : r ? `<div class="failed-card">${esc(r.message)}</div>` : '<div class="empty-message"><span class="spinner"></span><p>Считаем цепочку…</p></div>'}</section>`;
+        const delta = r?.status === 'optimal' ? comparePlans(result, r).metrics : null;
+        return `<section class="comparison-card ${mode === state.objective ? 'selected' : ''}"><h3>${icon(symbols[mode])}${titles[mode]}</h3><p class="helper">${description[mode]}</p>${r?.status === 'optimal' ? `<div class="comparison-value"><span>Ресурсный индекс</span><strong>${num(r.totals.weightedResources, 1)}</strong></div>${comparisonDeltaLabel(delta.resources)}<div class="comparison-value"><span>Энергия, МВт</span><strong>${num(r.totals.powerMW, 1)}</strong></div>${comparisonDeltaLabel(delta.energy, 'МВт')}<div class="comparison-value"><span>Зданий</span><strong>${num(r.totals.machines, 2)}</strong></div>${comparisonDeltaLabel(delta.buildings, 'зд')}<div class="comparison-value"><span>Рецептов / альтернатив</span><strong>${r.recipes.length} / ${r.recipes.filter((x) => recipeMap.get(x.recipeId)?.alternate).length}</strong></div><p class="helper">Разница относительно текущего плана</p><button class="button ${mode === state.objective ? 'subtle' : 'ghost'}" data-apply-mode="${mode}" ${mode === state.objective ? 'disabled' : ''}>${mode === state.objective ? 'Текущий план' : 'Применить этот план'}</button>` : r ? `<div class="failed-card">${esc(r.message)}</div>` : '<div class="empty-message"><span class="spinner"></span><p>Считаем цепочку…</p></div>'}</section>`;
       })
       .join('');
     if (modes.every((m) => comparisonCache[m]?.status === 'optimal'))
@@ -915,8 +928,9 @@ function renderCompareDetail(modes, titles) {
     comparisonCache[mode].resources.forEach((r) => {
       if (r.rate > 1e-6) all.add(r.item);
     });
+  const comparisons = Object.fromEntries(modes.map((mode) => [mode, comparePlans(result, comparisonCache[mode])]));
   $('compare-detail').innerHTML =
-    `<h3>Цена выбранной стратегии в сырье</h3><div class="table-wrap"><table><thead><tr><th>Ресурс / мин</th>${modes.map((m) => `<th class="numeric">${titles[m]}</th>`).join('')}</tr></thead><tbody>${[...all].map((id) => `<tr><td><div class="table-name">${itemIcon(itemMap.get(id), 'small')}${dual(itemMap.get(id))}</div></td>${modes.map((m) => `<td class="numeric">${num(comparisonCache[m].resources.find((r) => r.item === id)?.rate || 0)}</td>`).join('')}</tr>`).join('')}</tbody></table></div><p class="balance-explainer">Каждая стратегия сначала минимизирует свой основной показатель. Среди решений с тем же результатом используется дополнительный критерий, чтобы убрать лишние циклы. Это оптимум в рамках выбранной модели и разрешённых рецептов</p>`;
+    `<h3>Что изменится в добыче сырья</h3><p class="helper">В каждой ячейке расход и разница относительно текущего плана</p><div class="table-wrap"><table><thead><tr><th>Ресурс / мин</th>${modes.map((m) => `<th class="numeric">${titles[m]}${m === state.objective ? '<span class="cell-sub">Сейчас</span>' : ''}</th>`).join('')}</tr></thead><tbody>${[...all].map((id) => `<tr><td><div class="table-name">${itemIcon(itemMap.get(id), 'small')}<span>${dual(itemMap.get(id))}<span class="cell-sub">${unit(id)}</span></span></div></td>${modes.map((m) => `<td class="numeric"><strong>${num(comparisonCache[m].resources.filter((r) => r.item === id).reduce((sum, r) => sum + r.rate, 0))}</strong>${comparisonDeltaLabel(comparisons[m].resourceChanges.find((change) => change.item === id), unit(id))}</td>`).join('')}</tr>`).join('')}</tbody></table></div><p class="balance-explainer">Каждая стратегия сначала минимизирует свой основной показатель. Среди решений с тем же результатом используется дополнительный критерий, чтобы убрать лишние циклы. Это оптимум в рамках выбранной модели и разрешённых рецептов</p>`;
 }
 
 function openPicker(mode = 'target', index = null) {
@@ -990,6 +1004,7 @@ function applyPick(id) {
 }
 function openSettings(mode) {
   drawerMode = mode;
+  $('settings-dialog').dataset.mode = mode;
   $('settings-footnote').textContent =
     mode === 'about'
       ? 'Расчёты выполняются в вашем браузере'
@@ -1335,6 +1350,34 @@ function renderInspector() {
           `<div class="flow-row">${itemIcon(itemMap.get(id), 'small')}${dual(itemMap.get(id))}<span class="flow-amount">${num(rate)}<small>${unit(id)}</small></span></div>`,
       )
       .join('');
+  const flowSections = (inputRates, outputRates) =>
+    `${Object.keys(inputRates).length ? `<h4>Вход / Inputs</h4>${rows(inputRates)}` : ''}
+     ${Object.keys(outputRates).length ? `<h4>Выпуск / Outputs</h4>${rows(outputRates)}` : ''}`;
+  const totalsStats = row.machines !== undefined
+    ? `<div class="inspector-stats">
+         <div class="mini-metric"><small>Зданий при 100% / Buildings</small><strong>${num(row.machines, 3)}</strong></div>
+         <div class="mini-metric"><small>Средняя мощность / Avg. power</small><strong>${num(row.powerMW, 1)} <span class="metric-unit">МВт</span></strong></div>
+       </div>`
+    : '';
+  const totalFlows = recipe
+    ? `<section class="inspector-flow-section inspector-flow-total">
+         <div class="inspector-section-heading"><h3>Весь участок<small>Section total</small></h3></div>
+         ${totalsStats}
+         ${flowSections(inputs, outputs)}
+         <p class="helper">Суммарные потоки всех ${num(row.machines, 3)} зданий этого участка</p>
+       </section>`
+    : `${totalsStats}${flowSections(inputs, outputs)}`;
+  const recipeFlows = recipe
+    ? `<section class="inspector-flow-section inspector-flow-reference">
+         <div class="inspector-section-heading"><h3>Одно здание<small>One building</small></h3><span class="inspector-clock">100%</span></div>
+         <div class="inspector-stats">
+           <div class="mini-metric"><small>Цикл / Cycle</small><strong>${num(recipe.time)} <span class="metric-unit">с</span></strong></div>
+           <div class="mini-metric"><small>Средняя мощность / Avg. power</small><strong>${num(recipe.powerMW, 1)} <span class="metric-unit">МВт</span></strong></div>
+         </div>
+         ${flowSections(recipe.inputs, recipe.outputs)}
+         <p class="helper">Нормы за минуту при 100%, как в карточке здания в игре</p>
+       </section>`
+    : '';
   const type =
     {
       recipe: 'ПРОИЗВОДСТВО',
@@ -1343,8 +1386,28 @@ function renderInspector() {
       target: 'ЦЕЛЕВОЙ ВЫПУСК',
       surplus: 'ПОБОЧНЫЙ ПРОДУКТ',
     }[node.kind] || '';
-  $('inspector').innerHTML =
-    `<div class="inspector-header"><span>${itemIcon(item || itemMap.get(Object.keys(outputs)[0] || Object.keys(inputs)[0]))}</span><div><div class="eyebrow" style="margin-bottom:7px">${type}</div>${dual(title)}</div><button class="icon-button" id="close-inspector" aria-label="Закрыть детали">${icon('close')}</button></div>${recipe ? `<div class="inspector-building">${itemIcon(buildingMap.get(recipe.buildingId))}${dual(buildingMap.get(recipe.buildingId))}</div>` : ''}${row.machines !== undefined ? `<div class="inspector-stats"><div class="mini-metric"><small>Зданий / 100%</small><strong>${num(row.machines, 3)}</strong></div><div class="mini-metric"><small>Средняя мощность</small><strong>${num(row.powerMW, 1)} <span style="font-size:12px">МВт</span></strong></div></div>` : ''}${Object.keys(inputs).length ? `<h4>Входящие потоки / Inputs</h4>${rows(inputs)}` : ''}${Object.keys(outputs).length ? `<h4>Выпуск / Outputs</h4>${rows(outputs)}` : ''}${node.kind === 'surplus' ? `<p class="helper">${item?.form === 'solid' && item?.sinkable ? 'Можно направить потребителю или в AWESOME Sink. Энергия утилизации не включена' : 'Нужен потребитель, переработка или допустимый способ вывода. Прямой отправки в AWESOME Sink нет'}</p>` : ''}${selfReturns.length ? `<div class="return-note"><strong>Возврат в тот же процесс</strong><br>${selfReturns.map(([id, rate]) => `${esc(itemName(id))}: ${num(rate)} ${unit(id)}`).join('<br>')}<br>Полный вход указан выше; возвращённый поток не требует повторной добычи</div>` : ''}${recipe ? `<button class="button subtle wide" id="choose-selected-recipe">Сравнить и выбрать рецепт</button>` : ''}${node.kind === 'resource' ? `<button class="button subtle wide" data-open-resources>Цена и доступность сырья</button>` : ''}<h4>Рассмотреть участок</h4><div class="focus-actions"><button class="button subtle" data-focus="neighbors">Этот узел и ближайшие связи</button><button class="button subtle" data-focus="upstream">Что требуется на входе</button><button class="button subtle" data-focus="downstream">Куда идёт выпуск</button></div>${recipe ? `<button class="text-button" id="disable-selected-recipe" style="margin-top:15px">Исключить этот рецепт из расчёта</button>` : ''}<p class="helper">Полные количества показаны для всего плана. Фокус меняет только видимую часть схемы</p>`;
+  $('inspector').innerHTML = `
+    <div class="inspector-header">
+      <span>${itemIcon(item || itemMap.get(Object.keys(outputs)[0] || Object.keys(inputs)[0]))}</span>
+      <div><div class="eyebrow">${type}</div>${dual(title)}</div>
+      <button class="icon-button" id="close-inspector" aria-label="Закрыть детали">${icon('close')}</button>
+    </div>
+    ${recipe ? `<div class="inspector-building">${itemIcon(buildingMap.get(recipe.buildingId))}${dual(buildingMap.get(recipe.buildingId))}</div>` : ''}
+    ${totalFlows}
+    ${recipeFlows}
+    ${recipe ? `<p class="helper inspector-flow-note">На конвейерах и трубах показаны отдельные ветки потока<br>Вход участка указан полностью, включая возвратные потоки, если они есть</p>` : ''}
+    ${node.kind === 'surplus' ? `<p class="helper">${item?.form === 'solid' && item?.sinkable ? 'Можно направить потребителю или в AWESOME Sink. Энергия утилизации не включена' : 'Нужен потребитель, переработка или допустимый способ вывода. Прямой отправки в AWESOME Sink нет'}</p>` : ''}
+    ${selfReturns.length ? `<div class="return-note"><strong>Возврат в тот же процесс</strong><br>${selfReturns.map(([id, rate]) => `${esc(itemName(id))}: ${num(rate)} ${unit(id)}`).join('<br>')}<br>Возврат уже включён в полный вход участка и не требует повторной добычи</div>` : ''}
+    ${recipe ? `<button class="button subtle wide" id="choose-selected-recipe">Сравнить и выбрать рецепт</button>` : ''}
+    ${node.kind === 'resource' ? `<button class="button subtle wide" data-open-resources>Цена и доступность сырья</button>` : ''}
+    <h4>Рассмотреть участок</h4>
+    <div class="focus-actions">
+      <button class="button subtle" data-focus="neighbors">Этот узел и ближайшие связи</button>
+      <button class="button subtle" data-focus="upstream">Что требуется на входе</button>
+      <button class="button subtle" data-focus="downstream">Куда идёт выпуск</button>
+    </div>
+    ${recipe ? `<button class="text-button inspector-disable" id="disable-selected-recipe">Исключить этот рецепт из расчёта</button>` : ''}
+    <p class="helper">Количество ресурсов указано для выбранного участка текущего плана<br>Фокус меняет только видимую часть схемы</p>`;
   $('inspector').hidden = false;
   $('close-inspector').onclick = () => {
     $('inspector').hidden = true;
@@ -1729,6 +1792,11 @@ function installEvents() {
   $('graph-start').onclick = () => navigateGraph('start');
   $('graph-target').onclick = () => navigateGraph('target');
   $('graph-spacing').onchange = (event) => graph.setSpacing(event.target.value);
+  $('graph-detail').onchange = (event) => {
+    state.compactGraph = event.target.value === 'compact';
+    graph.setCompact(state.compactGraph);
+    persistChange();
+  };
   $('clear-focus').onclick = () => {
     graph.clearFocus();
     $('inspector').hidden = true;
@@ -1812,14 +1880,20 @@ function installEvents() {
 async function main() {
   hydrate();
   try {
-    const response = await fetch(new URL('./data/game-data.json', import.meta.url));
+    const response = await fetch(new URL('./data/game-data.json', import.meta.url), {
+      cache: 'no-cache',
+    });
     if (!response.ok) throw new Error(`База рецептов недоступна: HTTP ${response.status}`);
     data = await response.json();
     itemMap = new Map(data.items.map((i) => [i.id, i]));
     recipeMap = new Map(data.recipes.map((r) => [r.id, r]));
     buildingMap = new Map(data.buildings.map((b) => [b.id, b]));
     loadState();
-    graph = createGraph($('graph-canvas'), { onSelect: selectNode, onViewChange: updateGraphView });
+    graph = createGraph($('graph-canvas'), {
+      onSelect: selectNode,
+      onViewChange: updateGraphView,
+      compact: state.compactGraph,
+    });
     graph.setLanguage(state.language);
     dependencies = createDependencyView($('view-dependencies'), {
       onShowGraph: (nodeId) => {

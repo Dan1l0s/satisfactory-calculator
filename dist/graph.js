@@ -1,4 +1,5 @@
 import { planTransport, transportLoadsLabel, transportSummary } from './transport.js';
+import { resourceColor } from './resource-colors.js';
 const NS = 'http://www.w3.org/2000/svg';
 const WIDTH = 320;
 const HEIGHT = 282;
@@ -6,22 +7,13 @@ const COLUMN = 680;
 const GAP = 120;
 const PORT_HEADER = 218;
 const PORT_STEP = 112;
-const LABEL_WIDTH = 286;
-const LABEL_HEIGHT = 82;
+const LABEL_WIDTH = 300;
+const LABEL_HEIGHT = 112;
+const COMPACT_LABEL_HEIGHT = 64;
 const LANE_WIDTH = 9;
 const LANE_PITCH = 13;
 const MAX_DRAWN_LANES = 6;
 const EPSILON = 1e-7;
-const palette = [
-  '#7aadd1',
-  '#da9b70',
-  '#80bd9e',
-  '#a792d2',
-  '#dfbc70',
-  '#6ec6ce',
-  '#c98ba7',
-  '#9dafc1',
-];
 const buildingRu = {
   Smelter: 'Плавильня',
   Foundry: 'Литейная',
@@ -65,21 +57,7 @@ function safeIcon(url) {
     : '';
 }
 function colorFor(itemId, item) {
-  const key = `${itemId} ${item?.name || ''}`.toLowerCase();
-  if (/uranium|plutonium|ficsite|nuclear/.test(key)) return '#a2c96a';
-  if (/water|nitrogen|cooling/.test(key)) return '#66bdcf';
-  if (/copper|copperdust/.test(key)) return '#dc9e76';
-  if (/caterium|quickwire|gold|sulfur/.test(key)) return '#dbbc69';
-  if (/quartz|crystal|silica|oscillator/.test(key)) return '#ad9bcf';
-  if (/oil|fuel|rubber/.test(key)) return '#b394cb';
-  if (/bauxite|alumin/.test(key)) return '#cf9891';
-  if (/iron|steel|screw|rod|plate/.test(key)) return '#88abc7';
-  if (/coal|coke|carbon/.test(key)) return '#8d9cae';
-  if (/limestone|concrete/.test(key)) return '#b6b8a0';
-  if (/plastic|circuit|computer/.test(key)) return '#7fbda5';
-  let hash = 0;
-  for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) | 0;
-  return palette[Math.abs(hash) % palette.length];
+  return resourceColor(itemId, item?.name || '');
 }
 function textLines(value, limit = 25) {
   const words = String(value).split(/\s+/);
@@ -922,7 +900,9 @@ export function layoutFlow(nodesInput, edgesInput, options = {}) {
   if (options.maximumColumns) return layoutLegacyFlow(nodesInput, edgesInput, options);
   const gap = Number.isFinite(options.gap) ? Math.max(340, options.gap) : 360;
   const transportOptions = { beltTier: 5, pipeTier: 2, ...options.transport };
-  const nodes = nodesInput.map((n) => ({ ...n, width: WIDTH }));
+  const compact = options.compact === true;
+  const labelHeight = compact ? COMPACT_LABEL_HEIGHT : LABEL_HEIGHT;
+  const nodes = nodesInput.map((n) => ({ ...n, width: WIDTH, compact }));
   const edges = edgesInput.map((e) => {
     const transport = planTransport(e.form || 'solid', e.rate, transportOptions),
       drawnLanes = Math.min(MAX_DRAWN_LANES, transport.count);
@@ -933,7 +913,7 @@ export function layoutFlow(nodesInput, edgesInput, options = {}) {
       transport,
       drawnLanes,
       bundleWidth,
-      portPitch: LABEL_HEIGHT + bundleWidth + 18,
+      portPitch: labelHeight + bundleWidth + 18,
     };
   });
   if (!nodes.length)
@@ -958,9 +938,9 @@ export function layoutFlow(nodesInput, edgesInput, options = {}) {
     const input = incoming.get(node.id) || [],
       output = outgoing.get(node.id) || [];
     node.portCount = Math.max(1, input.length, output.length);
-    node.portHeader = node.buildingId ? PORT_HEADER : 174;
+    node.portHeader = compact ? 142 : node.buildingId ? PORT_HEADER : 174;
     node.portArea = Math.max(
-      PORT_STEP,
+      compact ? 82 : PORT_STEP,
       input.reduce((sum, e) => sum + e.portPitch, 0),
       output.reduce((sum, e) => sum + e.portPitch, 0),
     );
@@ -1098,7 +1078,7 @@ export function layoutFlow(nodesInput, edgesInput, options = {}) {
         node.portHeader +
         (node.portArea - list.reduce((sum, e) => sum + e.portPitch, 0)) / 2;
       list.forEach((edge, index) => {
-        edge[side] = cursor + LABEL_HEIGHT + 14 + edge.bundleWidth / 2;
+        edge[side] = cursor + labelHeight + 14 + edge.bundleWidth / 2;
         edge[side === 'targetY' ? 'targetSlot' : 'sourceSlot'] = index;
         cursor += edge.portPitch;
       });
@@ -1177,6 +1157,7 @@ export function layoutFlow(nodesInput, edgesInput, options = {}) {
     index < 0 ? columnX[0] - LABEL_WIDTH - 46 - routingWidth(index) : columnX[index] + WIDTH;
   const corridorX = (segment) =>
     corridorLeft(segment.gapIndex) +
+    LABEL_WIDTH + 46 +
     (trackOffsets.get(segment.gapIndex)?.[segment.track] || routingWidth(segment.gapIndex) / 2);
   const verticalTracks = [];
   for (const edge of edges) {
@@ -1189,20 +1170,22 @@ export function layoutFlow(nodesInput, edgesInput, options = {}) {
     edge.targetX = tx;
     edge.sourceX = sx;
     edge.labelBox = {
-      x: tx - LABEL_WIDTH - 20,
-      y: ty - edge.bundleWidth / 2 - LABEL_HEIGHT - 9,
+      x: sx + 20,
+      y: sy - edge.bundleWidth / 2 - labelHeight - 9,
       width: LABEL_WIDTH,
-      height: LABEL_HEIGHT,
+      height: labelHeight,
     };
     edge.labelX = edge.labelBox.x + LABEL_WIDTH / 2;
-    edge.labelY = edge.labelBox.y + LABEL_HEIGHT / 2;
+    edge.labelY = edge.labelBox.y + labelHeight / 2;
     const route = makeRoute({ x: sx, y: sy });
     if (!edge.backward) {
       for (let i = 0; i < edge.routeSteps.length; i++) {
         const segment = edge.routeSteps[i],
           dummy = edge.dummies[i],
-          endpointX = (dummy ? dummy.x : tx) - LABEL_WIDTH - 36;
+          endpointX = (dummy ? dummy.x : tx) - 36,
+          startX = i ? edge.dummies[i - 1].x + WIDTH : sx;
         const middleX = corridorX(segment);
+        route.line({ x: startX + LABEL_WIDTH + 36, y: segment.fromY });
         route.curve(
           { x: middleX, y: segment.fromY },
           { x: middleX, y: segment.toY },
@@ -1217,8 +1200,10 @@ export function layoutFlow(nodesInput, edgesInput, options = {}) {
         rx = corridorX(exit),
         lx = corridorX(enter),
         by = edge.returnY,
-        ex = tx - LABEL_WIDTH - 36;
-      const r = Math.min(54, (rx - sx) / 2, (ex - lx) / 2, (by - sy) / 4, (by - ty) / 4);
+        ex = tx - 36,
+        exitX = sx + LABEL_WIDTH + 36;
+      const r = Math.min(54, (rx - exitX) / 2, (ex - lx) / 2, (by - sy) / 4, (by - ty) / 4);
+      route.line({ x: exitX, y: sy });
       route.curve({ x: rx, y: sy }, { x: rx, y: sy + r }, { x: rx, y: sy + 2 * r });
       route.line({ x: rx, y: by - 2 * r });
       route.curve({ x: rx, y: by }, { x: rx - r, y: by }, { x: rx - 2 * r, y: by });
@@ -1247,7 +1232,7 @@ export function layoutFlow(nodesInput, edgesInput, options = {}) {
   }
   const crossings = routeCrossings(edges);
   let minX = Math.min(...nodes.map((n) => n.x), ...edges.map((e) => e.labelBox.x)),
-    right = Math.max(...nodes.map((n) => n.x + n.width));
+    right = Math.max(...nodes.map((n) => n.x + n.width), ...edges.map((e) => e.labelBox.x + e.labelBox.width));
   for (const edge of edges)
     for (const lane of edge.lanes)
       for (const point of lane.points) {
@@ -1286,9 +1271,11 @@ export function outputCamera(layout, dimensions, scale = 1) {
         b.edge.rate - a.edge.rate,
     );
   const producer = producers[0]?.node || target;
-  const labelBay = producer.kind === 'recipe' ? LABEL_WIDTH + 20 : 0;
-  const left = Math.min(producer.x - labelBay, target.x),
-    right = Math.max(producer.x + producer.width, target.x + target.width);
+  const producerRight = Math.max(producer.x + producer.width, ...layout.edges
+    .filter((edge) => edge.source === producer.id && edge.labelBox)
+    .map((edge) => edge.labelBox.x + edge.labelBox.width));
+  const left = Math.min(producer.x, target.x),
+    right = Math.max(producerRight, target.x + target.width);
   const top = Math.min(producer.y, target.y),
     bottom = Math.max(producer.y + producer.height, target.y + target.height);
   const showsTarget =
@@ -1301,7 +1288,7 @@ export function outputCamera(layout, dimensions, scale = 1) {
       ? height / 2 - ((regionTop + regionBottom) / 2) * scale
       : padding - regionTop * scale;
   return {
-    x: width - padding - (anchor.x + anchor.width) * scale,
+    x: width - padding - (showsTarget ? target.x + target.width : producerRight) * scale,
     y,
     scale,
     anchorId: anchor.id,
@@ -1338,20 +1325,33 @@ const styles = `
 .fl-graph .node-english{fill:#b6c3cf;font-size:14px;pointer-events:none}
 .fl-graph .node-building{fill:#d5dfe7;font-size:15px;font-weight:600;pointer-events:none}
 .fl-graph .node-building-en{fill:#a9b9c6;font-size:14px;pointer-events:none}
-.fl-graph .node-rate{fill:#edf2f6;font-size:16px;font-weight:650;pointer-events:none}
+.fl-graph .node-rate{fill:#edf2f6;font-size:22px;font-weight:650;pointer-events:none}
+.fl-graph .node-machines{fill:#f6dfbb;font-size:30px;font-weight:750;font-variant-numeric:tabular-nums;pointer-events:none}
+.fl-graph .compact-machines{font-size:40px}
+.fl-graph .compact-title{font-size:19px}
+.fl-graph .compact-secondary{font-size:13px}
+.fl-graph .compact-total{font-size:34px}
 .fl-graph .node-unit{fill:#adbbc7;font-size:14px;pointer-events:none}
 .fl-graph .node-kind{fill:#b8c6cf;font-size:14px;font-weight:650;letter-spacing:.6px;pointer-events:none}
 .fl-graph .port-name{fill:#b8c6cf;font-size:14px;pointer-events:none}
-.fl-graph .port-rate{fill:#edf2f6;font-size:14px;font-weight:600;pointer-events:none}
+.fl-graph .port-rate{fill:#edf2f6;font-size:26px;font-weight:750;font-variant-numeric:tabular-nums;pointer-events:none}
+.fl-graph .port-unit{fill:#9cacba;font-size:12px;pointer-events:none}
 .fl-graph .node-divider{stroke:#34404a;stroke-width:1;pointer-events:none}
 .fl-graph .node-port{stroke:#10151a;stroke-width:2;pointer-events:none}
 .fl-graph .edge-label{opacity:1;cursor:pointer}
-.fl-graph .edge-label rect{fill:#121b23;stroke:#35434e;stroke-width:1;rx:7}
+.fl-graph .edge-label .label-panel{fill:#121b23;stroke:#35434e;stroke-width:1;rx:7}
 .fl-graph .edge-label text{fill:#edf2f6;font-size:14px;font-weight:600;pointer-events:none}
-.fl-graph .edge-label .label-en{fill:#a9b9c6;font-size:14px;font-weight:400}
-.fl-graph .edge-label .label-rate{font-size:14px;font-weight:650}
-.fl-graph .edge-label .label-transport{fill:#cbd8e1;font-size:14px;font-weight:600}
-.fl-graph .edge-label .label-loads{fill:#a9bac8;font-size:14px;font-weight:400}
+.fl-graph .edge-label .label-title{font-size:17px}
+.fl-graph .edge-label .label-en{fill:#a9b9c6;font-size:12px;font-weight:400}
+.fl-graph .edge-label .label-rate{font-size:32px;font-weight:750;font-variant-numeric:tabular-nums}
+.fl-graph .edge-label .label-unit{fill:#b5c5d2;font-size:13px;font-weight:500}
+.fl-graph .edge-label .label-transport{fill:#cbd8e1;font-size:13px;font-weight:600}
+.fl-graph .edge-label .label-loads{fill:#a9bac8;font-size:12px;font-weight:400}
+.fl-graph .edge-label .label-summary{display:none}
+.fl-graph .edge-label .summary-rate{font-size:26px;font-weight:750;font-variant-numeric:tabular-nums}
+.fl-graph.fl-distant .edge-label .label-full{display:none}
+.fl-graph.fl-distant .edge-label .label-summary{display:inline}
+.fl-graph.fl-distant .port-unit,.fl-graph.fl-distant .node-subtitle,.fl-graph.fl-distant .node-building-en,.fl-graph.fl-distant .compact-secondary{display:none}
 .fl-graph.fl-hover .edge-label:not(.fl-highlight){opacity:.35}
 .fl-graph .column-label{fill:#60717d;font-size:11px;font-weight:650;letter-spacing:1.3px}
 .fl-graph .fl-empty{fill:#a2b1be;font-size:16px;text-anchor:middle}
@@ -1363,7 +1363,7 @@ const styles = `
 
 export function createGraph(
   container,
-  { onSelect, onViewChange, language: initialLanguage = 'both' } = {},
+  { onSelect, onViewChange, language: initialLanguage = 'both', compact: initialCompact = false } = {},
 ) {
   if (!container) throw new Error('Graph container is required');
   let full = { nodes: [], edges: [], itemMap: new Map(), diagnostics: [] },
@@ -1373,6 +1373,7 @@ export function createGraph(
     expandedModules = new Set(),
     topology = '';
   let spacing = 360,
+    compact = initialCompact === true,
     transportSettings = { beltTier: 5, pipeTier: 2 },
     outputAnchorId = null;
   let selectedId = null,
@@ -1381,6 +1382,7 @@ export function createGraph(
     view = { x: 0, y: 0, scale: 1 },
     dimensions = { width: 900, height: 600 };
   let drawnOnce = false,
+    readabilityScale = null,
     pointer = null,
     destroyed = false,
     lastClickMoved = false;
@@ -1475,6 +1477,7 @@ export function createGraph(
   });
   function updateView() {
     world.setAttribute('transform', `translate(${view.x} ${view.y}) scale(${view.scale})`);
+    updateReadability();
     pattern.setAttribute(
       'patternTransform',
       `translate(${view.x % (26 * view.scale)} ${view.y % (26 * view.scale)}) scale(${view.scale})`,
@@ -1487,6 +1490,29 @@ export function createGraph(
       width: dimensions.width,
       height: dimensions.height,
     });
+  }
+  function fitValue(element, width, size) {
+    element.style.fontSize = `${size}px`;
+    if (typeof element.getComputedTextLength !== 'function') return;
+    const length = element.getComputedTextLength();
+    if (length > width) element.style.fontSize = `${Math.max(12, size * width / length)}px`;
+  }
+  function updateReadability() {
+    if (readabilityScale === view.scale) return;
+    const revealDetails = svg.classList.contains('fl-distant') && view.scale >= 0.55;
+    svg.classList.toggle('fl-distant', view.scale < 0.55);
+    if (revealDetails) fitVisibleLabels();
+    readabilityScale = view.scale;
+    const factor = Math.min(2, Math.max(1, 0.5 / view.scale));
+    for (const edge of layout.edges) {
+      const element = labelElements.get(edge.id)?.querySelector('.label-summary');
+      if (element)
+        element.setAttribute('transform', `translate(${(edge.labelBox.width - 144 * factor) / 2} ${edge.labelBox.height - 32 * factor}) scale(${factor})`);
+    }
+    for (const element of nodeLayer.querySelectorAll('.port-rate'))
+      fitValue(element, (WIDTH - 40) / 2, Math.min(48, Math.max(compact ? 30 : 26, 12 / view.scale)));
+    for (const element of nodeLayer.querySelectorAll('.node-machines'))
+      fitValue(element, compact ? 164 : 140, Math.min(48, Math.max(compact ? 40 : 30, 12 / view.scale)));
   }
   function resize() {
     if (destroyed) return;
@@ -1504,13 +1530,17 @@ export function createGraph(
   }
   function fitVisibleLabels() {
     for (const text of nodeLayer.querySelectorAll('.node-title tspan')) fitLabel(text, WIDTH - 96);
-    for (const text of nodeLayer.querySelectorAll('.node-subtitle,.node-english'))
+    for (const text of nodeLayer.querySelectorAll('.node-subtitle,.node-english,.compact-title,.compact-secondary'))
       fitLabel(text, WIDTH - 32);
     for (const text of nodeLayer.querySelectorAll('.node-building,.node-building-en'))
       fitLabel(text, WIDTH - 90);
     for (const text of nodeLayer.querySelectorAll('.port-name'))
-      fitLabel(text, (WIDTH - 32) / 2 - 8);
-    for (const text of labelLayer.querySelectorAll('text')) fitLabel(text, LABEL_WIDTH - 22);
+      fitLabel(text, (WIDTH - 32) / 2 - 38);
+    for (const text of labelLayer.querySelectorAll('[data-fit-width]'))
+      fitLabel(text, Number(text.getAttribute('data-fit-width')));
+    for (const text of labelLayer.querySelectorAll('.summary-rate')) fitValue(text, 101, 26);
+    for (const text of labelLayer.querySelectorAll('.label-rate')) fitValue(text, LABEL_WIDTH - 24, 32);
+    readabilityScale = null;
   }
   function zoom(factor, point = { x: dimensions.width / 2, y: dimensions.height / 2 }) {
     const old = view.scale;
@@ -1716,7 +1746,8 @@ export function createGraph(
       );
       group.append(bridge);
     }
-    const text = `${label(full.itemMap.get(edge.itemId))} / ${num(edge.rate)} ${units(edge.itemId)}${edge.loop ? ' / возврат' : ''}`;
+    const targetNode = nodesById.get(edge.target);
+    const text = `${label(full.itemMap.get(edge.itemId))} / ${num(edge.rate)} ${units(edge.itemId)}${edge.loop ? ' / возврат' : ''}\n→ ${targetNode?.nameRu || targetNode?.name || edge.target}`;
     const details = `${text}\n${transportSummary(plan)}\nЗагрузка: ${transportLoadsLabel(plan)}${plan.loadsTruncated ? `\nНа схеме показано ${edge.drawnLanes} из ${num(plan.count)} линий; последняя соответствует линии № ${num(plan.count)}` : ''}`;
     const hit = svgEl('path', {
       class: 'flow-hit',
@@ -1734,42 +1765,52 @@ export function createGraph(
       class: 'edge-label',
       transform: `translate(${box.x},${box.y})`,
       'data-label-edge': edge.id,
+      'aria-label': details,
     });
-    lab.append(svgEl('rect', { width: box.width, height: box.height }));
-    lab.append(
+    const content = svgEl('g', { class: 'label-full' });
+    content.append(svgEl('rect', { class: 'label-panel', width: box.width, height: box.height }));
+    content.append(
       svgEl('rect', {
         x: 0,
         y: 9,
         width: 3,
         height: box.height - 18,
-        fill: edge.color,
-        stroke: 'none',
+        style: `fill:${edge.color};stroke:none`,
         rx: 1.5,
       }),
     );
-    lab.append(
+    const icon = safeIcon(item.icon);
+    if (icon) {
+      cacheIcon(icon);
+      content.append(svgEl('image', { href: icon, x: 10, y: compact ? 5 : 10, width: 28, height: 28 }));
+    }
+    content.append(
       svgEl(
         'text',
-        { x: 11, y: 18 },
+        { class: 'label-title', x: 45, y: compact ? 20 : 25, 'data-fit-width': box.width - 57 },
         trim(`${edge.loop ? (englishFirst ? '↶ Return / ' : '↶ Возврат / ') : ''}${primary}`, 36),
       ),
     );
-    if (secondary && secondary !== primary)
-      lab.append(svgEl('text', { class: 'label-en', x: 11, y: 36 }, trim(secondary, 37)));
+    if (!compact && secondary && secondary !== primary)
+      content.append(svgEl('text', { class: 'label-en', x: 45, y: 43, 'data-fit-width': box.width - 57 }, secondary));
     const type = pipe ? (englishFirst ? 'pipes' : 'труб') : englishFirst ? 'belts' : 'конв.';
-    lab.append(
-      svgEl(
-        'text',
-        { class: 'label-rate', x: 11, y: 55, fill: edge.color },
-        `${num(edge.rate)} ${units(edge.itemId)} / ${num(plan.count)} ${type} Mk.${plan.tier}`,
-      ),
-    );
+    const rateText = svgEl('text', { class: 'label-rate', x: 11, y: compact ? 53 : 77 });
+    rateText.append(svgEl('tspan', { style: `fill:${edge.color}` }, num(edge.rate)));
+    rateText.append(svgEl('tspan', { class: 'label-unit', dx: 8 }, units(edge.itemId)));
+    content.append(rateText);
     const loads = transportLoadsLabel(plan).replace(/ (шт\/мин|м³\/мин)$/, '');
     const capacity =
       plan.count > 1
         ? `${loads} / ${englishFirst ? 'each' : 'по'} ${num(plan.capacity)}${plan.loadsTruncated ? (englishFirst ? ' / 6 shown' : ' / 6 видно') : ''}`
         : `${englishFirst ? 'Capacity' : 'Ёмкость'}: ${num(plan.capacity)} ${units(edge.itemId)}`;
-    lab.append(svgEl('text', { class: 'label-loads', x: 11, y: 75 }, capacity));
+    if (!compact)
+      content.append(svgEl('text', { class: 'label-transport', x: 11, y: 101, 'data-fit-width': box.width - 22 }, `${num(plan.count)} ${type} Mk.${plan.tier} / ${capacity}`));
+    const summary = svgEl('g', { class: 'label-summary' });
+    summary.append(svgEl('rect', { class: 'label-panel', width: 144, height: 32, style: `stroke:${edge.color}` }));
+    if (icon) summary.append(svgEl('image', { href: icon, x: 5, y: 4, width: 24, height: 24 }));
+    else summary.append(svgEl('circle', { cx: 17, cy: 16, r: 8, fill: edge.color }));
+    summary.append(svgEl('text', { class: 'summary-rate', x: 36, y: 25, style: `fill:${edge.color}` }, num(edge.rate)));
+    lab.append(content, summary);
     lab.append(svgEl('title', {}, `${label(item)}\n${item.name || ''}\n${details}`));
     lab.addEventListener('pointerenter', () => highlightEdge(edge));
     lab.addEventListener('pointerleave', clearHighlight);
@@ -1821,10 +1862,10 @@ export function createGraph(
     const icon = safeIcon(item?.icon),
       building = full.buildingMap?.get(node.buildingId),
       buildingIcon = safeIcon(node.buildingIcon || building?.icon);
-    const addIcon = (url, y, type) => {
+    const addIcon = (url, y, type, x = 14) => {
       group.append(
         svgEl('rect', {
-          x: 14,
+          x,
           y,
           width: 52,
           height: 52,
@@ -1838,7 +1879,7 @@ export function createGraph(
         group.append(
           svgEl('image', {
             href: url,
-            x: 18,
+            x: x + 4,
             y: y + 4,
             width: 44,
             height: 44,
@@ -1851,7 +1892,7 @@ export function createGraph(
           svgEl(
             'text',
             {
-              x: 40,
+              x: x + 26,
               y: y + 33,
               'text-anchor': 'middle',
               fill: node.color,
@@ -1866,93 +1907,110 @@ export function createGraph(
     const englishFirst = language === 'en' || language === 'en-ru',
       primary = englishFirst ? node.nameEn : node.nameRu,
       secondary = language === 'both' ? node.nameEn : language === 'en-ru' ? node.nameRu : '';
-    const title = svgEl('text', { class: 'node-title', x: 80, y: 32 });
-    textLines(primary, 21).forEach((line, i) =>
-      title.append(svgEl('tspan', { x: 80, dy: i ? 21 : 0 }, line)),
-    );
-    group.append(title);
-    if (secondary && secondary !== primary)
-      group.append(svgEl('text', { class: 'node-english', x: 16, y: 85 }, trim(secondary, 38)));
-    let subtitle = '';
-    if (unresolved)
-      subtitle = node.kind === 'resource' ? 'НЕЗАКРЫТЫЙ ДЕФИЦИТ' : 'НЕРАСПРЕДЕЛЁННЫЙ ВЫХОД';
-    else if (node.kind === 'resource') subtitle = 'ДОБЫЧА';
-    else if (node.kind === 'import') subtitle = 'ВНЕШНЯЯ ПОСТАВКА';
-    else if (node.kind === 'target') subtitle = 'ЦЕЛЕВОЙ ВЫПУСК';
-    else if (node.kind === 'surplus')
-      subtitle = record.sinkable ? 'ИЗЛИШЕК / УТИЛИЗАЦИЯ' : 'ПОБОЧНЫЙ ПРОДУКТ';
-    const hasBuilding = !!node.buildingId;
-    if (hasBuilding) {
-      addIcon(buildingIcon, 96, 'building');
-      const fallbackRu =
-        record.type === 'miner'
-          ? `Бур Mk.${record.tier || 3}`
-          : record.type === 'water'
-            ? 'Водяная помпа'
-            : record.type === 'oil'
-              ? 'Нефтяная помпа'
-              : 'Добыча ресурса';
-      const fallbackEn =
-        record.type === 'miner'
-          ? `Miner Mk.${record.tier || 3}`
-          : record.type === 'water'
-            ? 'Water Extractor'
-            : record.type === 'oil'
-              ? 'Oil Extractor'
-              : 'Resource extraction';
-      const buildingRuName = node.buildingName || building?.nameRu || fallbackRu,
-        buildingEnName = node.buildingNameEn || building?.name || fallbackEn;
-      const first = englishFirst ? buildingEnName : buildingRuName,
-        second = language === 'both' ? buildingEnName : language === 'en-ru' ? buildingRuName : '';
-      group.append(svgEl('text', { class: 'node-building', x: 78, y: 115 }, first));
-      if (second && second !== first)
-        group.append(svgEl('text', { class: 'node-building-en', x: 78, y: 137 }, second));
-      subtitle = `${buildingRuName} / ${buildingEnName}`;
-      if (node.kind === 'recipe') {
-        const recipeLabel = String(
-          (englishFirst ? node.recipeNameEn : node.recipeName) || '',
-        ).replace(
-          /^(?:(?:Alternate|Alternative|Альт(?:ернативный)?|Альтернатива)\.?\s*[:\u00b7-]?\s*)+/i,
-          '',
-        );
-        group.append(
-          svgEl(
-            'text',
-            { class: 'node-subtitle', x: 16, y: 164 },
-            `${node.alternate ? 'ALT / ' : ''}${recipeLabel}`,
-          ),
-        );
-        subtitle += ` / ${node.recipeName}`;
-      } else
-        group.append(
-          svgEl(
-            'text',
-            { class: 'node-subtitle', x: 16, y: 164 },
-            record.type === 'miner'
-              ? `Добыча / ${record.purity === 'pure' ? 'чистая' : record.purity === 'impure' ? 'бедная' : 'обычная'} залежь`
-              : 'ДОБЫЧА СЫРЬЯ',
-          ),
-        );
-    } else group.append(svgEl('text', { class: 'node-subtitle', x: 16, y: 112 }, subtitle));
-    const rateY = hasBuilding ? 184 : 142,
-      dividerY = hasBuilding ? 198 : 154,
-      headingY = hasBuilding ? 218 : 174;
-    group.append(
-      svgEl(
-        'text',
-        { class: 'node-rate', x: 16, y: rateY },
-        `${num(node.rate)} ${units(node.itemId)}`,
-      ),
-    );
-    const machines = node.kind === 'recipe' || node.kind === 'resource' ? record.machines : null;
-    if (machines != null)
+    const machines = node.kind === 'recipe' || node.kind === 'resource' ? record.machines : null,
+      hasBuilding = !!node.buildingId;
+    let subtitle = [node.buildingName, node.buildingNameEn, node.recipeName, node.recipeNameEn].filter(Boolean).join(' / ');
+    if (compact) {
+      if (hasBuilding) addIcon(buildingIcon, 14, 'building', 80);
+      group.append(svgEl('text', {
+        class: machines != null ? 'node-machines compact-machines' : 'node-rate compact-total',
+        x: node.width - 16,
+        y: 50,
+        'text-anchor': 'end',
+      }, num(machines ?? node.rate)));
+      group.append(svgEl('text', {
+        class: 'node-unit', x: node.width - 16, y: 70, 'text-anchor': 'end',
+      }, machines != null ? (englishFirst ? 'buildings' : 'зданий') : units(node.itemId)));
+      group.append(svgEl('text', { class: 'node-title compact-title', x: 16, y: 95 }, primary));
+      if (secondary && secondary !== primary)
+        group.append(svgEl('text', { class: 'node-english compact-secondary', x: 16, y: 115 }, secondary));
+    } else {
+      const title = svgEl('text', { class: 'node-title', x: 80, y: 32 });
+      textLines(primary, 21).forEach((line, i) =>
+        title.append(svgEl('tspan', { x: 80, dy: i ? 21 : 0 }, line)),
+      );
+      group.append(title);
+      if (secondary && secondary !== primary)
+        group.append(svgEl('text', { class: 'node-english', x: 16, y: 85 }, trim(secondary, 38)));
+      subtitle = '';
+      if (unresolved)
+        subtitle = node.kind === 'resource' ? 'НЕЗАКРЫТЫЙ ДЕФИЦИТ' : 'НЕРАСПРЕДЕЛЁННЫЙ ВЫХОД';
+      else if (node.kind === 'resource') subtitle = 'ДОБЫЧА';
+      else if (node.kind === 'import') subtitle = 'ВНЕШНЯЯ ПОСТАВКА';
+      else if (node.kind === 'target') subtitle = 'ЦЕЛЕВОЙ ВЫПУСК';
+      else if (node.kind === 'surplus')
+        subtitle = record.sinkable ? 'ИЗЛИШЕК / УТИЛИЗАЦИЯ' : 'ПОБОЧНЫЙ ПРОДУКТ';
+      if (hasBuilding) {
+        addIcon(buildingIcon, 96, 'building');
+        const fallbackRu =
+          record.type === 'miner'
+            ? `Бур Mk.${record.tier || 3}`
+            : record.type === 'water'
+              ? 'Водяная помпа'
+              : record.type === 'oil'
+                ? 'Нефтяная помпа'
+                : 'Добыча ресурса';
+        const fallbackEn =
+          record.type === 'miner'
+            ? `Miner Mk.${record.tier || 3}`
+            : record.type === 'water'
+              ? 'Water Extractor'
+              : record.type === 'oil'
+                ? 'Oil Extractor'
+                : 'Resource extraction';
+        const buildingRuName = node.buildingName || building?.nameRu || fallbackRu,
+          buildingEnName = node.buildingNameEn || building?.name || fallbackEn;
+        const first = englishFirst ? buildingEnName : buildingRuName,
+          second = language === 'both' ? buildingEnName : language === 'en-ru' ? buildingRuName : '';
+        group.append(svgEl('text', { class: 'node-building', x: 78, y: 115 }, first));
+        if (second && second !== first)
+          group.append(svgEl('text', { class: 'node-building-en', x: 78, y: 137 }, second));
+        subtitle = `${buildingRuName} / ${buildingEnName}`;
+        if (node.kind === 'recipe') {
+          const recipeLabel = String(
+            (englishFirst ? node.recipeNameEn : node.recipeName) || '',
+          ).replace(
+            /^(?:(?:Alternate|Alternative|Альт(?:ернативный)?|Альтернатива)\.?\s*[:\u00b7-]?\s*)+/i,
+            '',
+          );
+          group.append(
+            svgEl(
+              'text',
+              { class: 'node-subtitle', x: 16, y: 164 },
+              `${node.alternate ? 'ALT / ' : ''}${recipeLabel}`,
+            ),
+          );
+          subtitle += ` / ${node.recipeName}`;
+        } else
+          group.append(
+            svgEl(
+              'text',
+              { class: 'node-subtitle', x: 16, y: 164 },
+              record.type === 'miner'
+                ? `Добыча / ${record.purity === 'pure' ? 'чистая' : record.purity === 'impure' ? 'бедная' : 'обычная'} залежь`
+                : 'ДОБЫЧА СЫРЬЯ',
+            ),
+          );
+      } else group.append(svgEl('text', { class: 'node-subtitle', x: 16, y: 112 }, subtitle));
+      const rateY = hasBuilding ? 190 : 142;
       group.append(
         svgEl(
           'text',
-          { class: 'node-rate', x: node.width - 16, y: rateY, 'text-anchor': 'end' },
-          `${num(machines)} зд`,
+          { class: 'node-rate', x: 16, y: rateY },
+          `${num(node.rate)} ${units(node.itemId)}`,
         ),
       );
+      if (machines != null)
+        group.append(
+          svgEl(
+            'text',
+            { class: 'node-machines', x: node.width - 16, y: rateY, 'text-anchor': 'end' },
+            `${num(machines)} зд`,
+          ),
+        );
+    }
+    const dividerY = node.portHeader - 20,
+      headingY = node.portHeader;
     group.append(
       svgEl('line', {
         class: 'node-divider',
@@ -1991,15 +2049,21 @@ export function createGraph(
       );
       const x = input ? 16 : node.width - 16,
         anchor = input ? 'start' : 'end';
+      const portIcon = safeIcon(material?.icon);
+      if (portIcon) {
+        cacheIcon(portIcon);
+        group.append(svgEl('image', { href: portIcon, x: input ? 16 : node.width - 40, y: y - 65, width: 24, height: 24 }));
+      }
       group.append(
         svgEl(
           'text',
-          { class: 'port-rate', x, y: y - 5, 'text-anchor': anchor, fill: edge.color },
-          `${num(edge.rate)} ${units(edge.itemId)}`,
+          { class: 'port-rate', x, y: y - 9, 'text-anchor': anchor, style: `fill:${edge.color}` },
+          num(edge.rate),
         ),
       );
       group.append(
-        svgEl('text', { class: 'port-name', x, y: y + 17, 'text-anchor': anchor }, trim(name, 18)),
+        svgEl('text', { class: 'port-name', x: input ? 46 : node.width - 46, y: y - 46, 'text-anchor': anchor }, name),
+        svgEl('text', { class: 'port-unit', x, y: y + 18, 'text-anchor': anchor }, units(edge.itemId)),
       );
     };
     for (const edge of inEdges) port(edge, true);
@@ -2081,7 +2145,9 @@ export function createGraph(
     const edges = projected.edges.filter(
       (e) => !visible || (visible.has(e.source) && visible.has(e.target)),
     );
-    layout = layoutFlow(nodes, edges, { gap: spacing, transport: transportSettings });
+    layout = layoutFlow(nodes, edges, { gap: spacing, transport: transportSettings, compact });
+    svg.classList.toggle('fl-compact', compact);
+    svg.setAttribute('data-detail', compact ? 'compact' : 'full');
     nodesById.clear();
     nodeElements.clear();
     edgeElements.clear();
@@ -2226,8 +2292,20 @@ export function createGraph(
   }
   function exportSvg() {
     clearHighlight();
-    const clone = svg.cloneNode(true),
-      b = layout.bounds;
+    let clone;
+    svg.classList.remove('fl-distant');
+    try {
+      fitVisibleLabels();
+      for (const text of nodeLayer.querySelectorAll('.port-rate'))
+        fitValue(text, (WIDTH - 40) / 2, compact ? 30 : 26);
+      for (const text of nodeLayer.querySelectorAll('.node-machines'))
+        fitValue(text, compact ? 164 : 140, compact ? 40 : 30);
+      clone = svg.cloneNode(true);
+    } finally {
+      readabilityScale = null;
+      updateReadability();
+    }
+    const b = layout.bounds;
     clone.setAttribute('xmlns', NS);
     clone.setAttribute('width', String(Math.ceil(b.width)));
     clone.setAttribute('height', String(Math.ceil(b.height)));
@@ -2236,7 +2314,7 @@ export function createGraph(
     clone.querySelector('.fl-minimap')?.remove();
     clone.querySelector('.fl-backdrop')?.setAttribute('fill', '#10151a');
     clone.querySelector('pattern')?.remove();
-    clone.classList.remove('fl-hover');
+    clone.classList.remove('fl-hover', 'fl-distant');
     for (const image of clone.querySelectorAll('image')) {
       const href = image.getAttribute('href');
       image.setAttribute('href', iconCache.get(href) || new URL(href, document.baseURI).href);
@@ -2328,6 +2406,15 @@ export function createGraph(
       render();
       restoreAnchor(anchor);
     },
+    setCompact(value = false) {
+      const next = value === true;
+      if (next === compact) return;
+      const anchor = captureAnchor(selectedId) || captureAnchor(focus?.id) ||
+        captureAnchor(outputAnchorId) || captureAnchor(layout.nodes.find((n) => n.kind === 'target')?.id);
+      compact = next;
+      render();
+      restoreAnchor(anchor);
+    },
     zoomIn() {
       zoom(1.3);
     },
@@ -2399,6 +2486,7 @@ export function createGraph(
         diagnostics: full.diagnostics,
         zoom: view.scale,
         overview: false,
+        compact,
         expandedModules: [],
         focus: focus ? { ...focus } : null,
         modules: 0,

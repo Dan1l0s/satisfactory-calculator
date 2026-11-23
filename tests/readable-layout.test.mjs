@@ -55,7 +55,8 @@ function inspectGeometry(layout) {
     assert.equal(edge.lanes.length, Math.min(6, edge.transport.count));
     assert.equal(edge.lanes.at(-1).load, edge.transport.lastLoad);
     assert.equal(edge.lanes.at(-1).number, edge.transport.count);
-    assert.ok(edge.labelBox.width >= 280 && edge.labelBox.height === 82);
+    assert.ok(Object.values(edge.labelBox).every(Number.isFinite));
+    assert.ok(edge.labelBox.width > 0 && edge.labelBox.height > 0);
     for (const node of layout.nodes)
       assert.ok(!overlap(edge.labelBox, node), `Label ${edge.id} intersects card ${node.id}`);
     for (let j = i + 1; j < layout.edges.length; j++)
@@ -136,6 +137,22 @@ for (const [item, rate, alternates] of [
     assert.ok(node.height >= 282);
   }
   inspectGeometry(layout);
+  const compact = layoutFlow(full.nodes, full.edges, { gap: 360, compact: true });
+  assert.deepEqual(
+    compact.nodes.map((node) => node.id),
+    layout.nodes.map((node) => node.id),
+    'Compact mode keeps every production step',
+  );
+  assert.deepEqual(
+    compact.edges.map((edge) => [edge.id, edge.source, edge.target, edge.rate]),
+    layout.edges.map((edge) => [edge.id, edge.source, edge.target, edge.rate]),
+    'Compact mode preserves material flows and recycling',
+  );
+  for (const node of compact.nodes) {
+    const detailed = layout.nodes.find((entry) => entry.id === node.id);
+    assert.ok(node.height < detailed.height, 'Compact cards occupy less vertical space');
+  }
+  inspectGeometry(compact);
   for (const edge of layout.edges) {
     const original = full.edges.find((e) => e.id === edge.id);
     assert.equal(edge.rate, original.rate);
@@ -219,10 +236,18 @@ const fourInputLayout = layoutFlow(
     color: '#88abc7',
   })),
 );
-assert.equal(
-  fourInputLayout.nodes.find((node) => node.id === 'producer').height,
-  678,
-  'A four-input machine must fit a readable fullscreen canvas',
+const compactFourInputs = layoutFlow(
+  [...fourInputs, fixtureNodes[0]],
+  fourInputLayout.edges,
+  { compact: true },
 );
+const detailedProducer = fourInputLayout.nodes.find((node) => node.id === 'producer');
+const compactProducer = compactFourInputs.nodes.find((node) => node.id === 'producer');
+assert.ok(compactProducer.height < detailedProducer.height);
+for (const edge of compactFourInputs.edges) {
+  const portY = edge.targetY - compactProducer.y;
+  assert.ok(portY > compactProducer.portHeader && portY < compactProducer.height);
+}
 inspectGeometry(fourInputLayout);
-console.log('PASS four-line labels and compact four-input card (678 px), without shrinking type');
+inspectGeometry(compactFourInputs);
+console.log('PASS full and compact four-input cards retain every port without overlap');

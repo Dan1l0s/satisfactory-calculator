@@ -12,6 +12,7 @@
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="./styles.css" />
     <link rel="stylesheet" href="./dependencies.css" />
+    <link rel="stylesheet" href="./comparison.css" />
   </head>
   <body>
     <header class="app-header">
@@ -249,6 +250,13 @@
                 </div>
                 <div id="graph-search-results" class="graph-search-results" hidden></div>
               </div>
+              <label class="graph-detail"
+                ><span>Вид</span
+                ><select id="graph-detail" aria-label="Вид производственной схемы">
+                  <option value="full">Подробно</option>
+                  <option value="compact">Упрощённо</option>
+                </select></label
+              >
               <label class="graph-spacing"
                 ><span>Расстояние</span
                 ><select id="graph-spacing" aria-label="Расстояние между этапами">

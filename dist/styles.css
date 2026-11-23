@@ -919,6 +919,9 @@ button.metric:hover {
 .inspector-header .dual-name small {
   font-size: 11px;
 }
+.inspector-header .eyebrow {
+  margin-bottom: 7px;
+}
 .inspector-stats {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -941,6 +944,73 @@ button.metric:hover {
   font-size: 19px;
   margin-top: 5px;
   font-weight: 550;
+}
+.mini-metric .metric-unit {
+  font-size: 12px;
+}
+.inspector-flow-section {
+  padding: 13px;
+  margin: 15px 0;
+  border: 1px solid #435566;
+  border-radius: 8px;
+  background: #16212a;
+}
+.inspector-flow-total {
+  border-top: 3px solid var(--orange);
+}
+.inspector-flow-reference {
+  border-top: 3px solid #75b6c7;
+}
+.inspector-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.inspector-section-heading h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #e6eef4;
+}
+.inspector-section-heading h3 small {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 400;
+  color: #a7bbc9;
+}
+.inspector-clock {
+  border: 1px solid #4b7180;
+  border-radius: 5px;
+  padding: 5px 7px;
+  color: #bce1ea;
+  font-size: 13px;
+  font-weight: 600;
+}
+.inspector-flow-section .inspector-stats {
+  margin: 12px 0;
+  gap: 7px;
+}
+.inspector-flow-section .mini-metric {
+  padding: 8px;
+}
+.inspector-flow-section .flow-amount {
+  font-size: 19px;
+  font-variant-numeric: tabular-nums;
+}
+.inspector-flow-section .dual-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.inspector-flow-section .helper {
+  margin-bottom: 0;
+}
+.inspector-flow-note {
+  line-height: 1.6;
+}
+.inspector-disable {
+  margin-top: 15px;
 }
 .inspector h4 {
   font-size: 11px;
@@ -2444,17 +2514,22 @@ dialog::backdrop {
 .graph-search-option > span:last-child {
   font-size: 12px;
 }
-.graph-spacing {
+.graph-spacing,
+.graph-detail {
   display: flex;
   align-items: center;
   gap: 8px;
   color: #aab9c6;
   font-size: 13px;
 }
-.graph-spacing select {
+.graph-spacing select,
+.graph-detail select {
   min-height: 36px;
   width: 119px;
   font-size: 14px;
+}
+.graph-detail select {
+  width: 138px;
 }
 .graph-tools {
   gap: 7px;
@@ -3068,6 +3143,43 @@ dialog::backdrop {
   justify-content: space-between;
   margin-bottom: 20px;
 }
+.recipe-comparison-basis {
+  padding: 16px 18px;
+  margin-bottom: 20px;
+  border: 1px solid #4c6475;
+  border-radius: 8px;
+  background: #1e303d;
+}
+.recipe-comparison-basis strong {
+  display: block;
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+}
+.recipe-comparison-basis span {
+  display: block;
+  margin-top: 7px;
+  color: #bed0dc;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.comparison-change {
+  display: block;
+  margin-top: 7px;
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.6;
+}
+.comparison-change.less {
+  color: #94dfbc;
+}
+.comparison-change.more {
+  color: #ffc698;
+}
+.comparison-change.unchanged {
+  color: #adc0ce;
+  font-weight: 400;
+}
 .recipe-candidate-list {
   display: flex;
   flex-direction: column;
@@ -3283,7 +3395,8 @@ dialog::backdrop {
     padding: 7px 10px;
     margin-left: auto;
   }
-  .graph-spacing > span {
+  .graph-spacing > span,
+  .graph-detail > span {
     display: none;
   }
 }
@@ -3312,6 +3425,9 @@ dialog::backdrop {
   }
   .graph-spacing select {
     width: 110px;
+  }
+  .graph-detail select {
+    width: 132px;
   }
   .graph-search-results {
     left: 0;

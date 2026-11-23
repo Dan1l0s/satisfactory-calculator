@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "checkedAt": "2026-11-23T12:59:00Z",
+  "checkedAt": "2026-11-23T17:51:12+00:00",
   "matched": true,
   "recipeCount": 291,
   "altCount": 106,
@@ -14,9 +14,10 @@
     "notesUrl": "https://store.steampowered.com/news/app/526870/view/679641571029680377",
     "recipeChangesAnnounced": false,
     "publishedChanges": "Network and replication improvements for multiplayer, especially large saves",
-    "exactPatchDocsCompared": false
+    "exactPatchDocsCompared": false,
+    "checkedAt": "2026-11-23T17:50:02.266616+00:00"
   },
-  "versionBoundary": "All available current production datasets agree. The SatisfactoryTools version index groups 1.2.3.1, 1.2.4.1 and 1.2.5.0. SCIM does not declare an exact patch. Original Docs was verified as 1.2.3.1. No separately obtained original 1.2.5.1 Docs was compared; latest release notes announce no recipe changes",
+  "versionBoundary": "Fresh SCIM Stable and current SatisfactoryTools datasets agree for every manufacturing recipe. SatisfactoryTools currently publishes dataset 1.2.5.0 and groups game versions 1.2.3.1, 1.2.4.1 and 1.2.5.0. SCIM does not declare an exact patch. Cached original Docs 1.2.3.1 was compared again, and a fresh GitHub blob check confirms the mirror has not changed. Latest official release 1.2.5.1 is confirmed by the Steam news API; no separately obtained original 1.2.5.1 Docs was compared. Its published notes announce network changes, not recipe changes",
   "checkedFields": [
     "recipe IDs and coverage",
     "production building",
@@ -25,14 +26,16 @@
     "craft duration",
     "minimum power",
     "maximum power",
-    "average power"
+    "average power",
+    "hard-drive alternate flags, compared with SatisfactoryTools and SCIM research unlocks"
   ],
   "method": {
     "comparison": "Independent normalization, separate from the project refresh script; producers enumerated from each source",
     "rates": "Per minute at 100% clock; source litres converted to cubic metres for SCIM and original Docs. SatisfactoryTools already supplies fluid amounts in cubic metres",
     "power": "Original native building class determines fixed versus variable power. SatisfactoryTools uses variablePowerDraw only when building powerUsage is zero",
     "absoluteTolerance": 1e-08,
-    "relativeTolerance": 1e-10
+    "relativeTolerance": 1e-10,
+    "secondaryValidation": "The project normalizer also regenerated all 291 recipe records from the freshly downloaded SCIM source; every production value and policy flag is identical. One Russian display name retains the local hyphen instead of the source long dash"
   },
   "comparisons": [
     {
@@ -41,14 +44,20 @@
       "missingRecipes": 0,
       "unexpectedRecipes": 0,
       "valueDifferences": 0,
-      "rawSourceMatchesRecordedAppHash": true
+      "rawSourceMatchesRecordedAppHash": true,
+      "rawSourceMatchedPriorAppHash": false,
+      "productionDataMatchesPriorSnapshot": true,
+      "alternateFlagDifferences": 0,
+      "policyFlagDifferences": 0,
+      "checkedAt": "2026-11-23T17:49:23.093904+00:00"
     },
     {
       "sourceId": "game-docs",
       "comparedRecipes": 291,
       "missingRecipes": 0,
       "unexpectedRecipes": 0,
-      "valueDifferences": 0
+      "valueDifferences": 0,
+      "checkedAt": "2026-11-23T17:49:23.093904+00:00"
     },
     {
       "sourceId": "sft-stable",
@@ -57,7 +66,8 @@
       "expectedSeasonalRecipesOutsideThisVariant": 15,
       "unexpectedRecipes": 0,
       "valueDifferences": 0,
-      "alternateFlagDifferences": 0
+      "alternateFlagDifferences": 0,
+      "checkedAt": "2026-11-23T17:49:23.093904+00:00"
     },
     {
       "sourceId": "sft-ficsmas",
@@ -65,7 +75,8 @@
       "missingRecipes": 0,
       "unexpectedRecipes": 0,
       "valueDifferences": 0,
-      "alternateFlagDifferences": 0
+      "alternateFlagDifferences": 0,
+      "checkedAt": "2026-11-23T17:49:23.093904+00:00"
     }
   ],
   "uranium": {
@@ -107,40 +118,62 @@
       "id": "scim-stable",
       "label": "SCIM Stable English game data",
       "url": "https://static.satisfactory-calculator.com/data/json/gameData/en-Stable.json",
-      "fetchedAt": "2026-11-23T12:50:31.446456+00:00",
-      "sha256": "8c09e085cb8fe7fc08fbec34f92a67b35c78054159615eae6b0cca5c8451de52",
+      "fetchedAt": "2026-11-23T17:47:23.461781+00:00",
+      "sha256": "ad8bfbe8be16ed977936098267730f12319f01caa585896ce7e24583686b7dfe",
       "bytes": 1548816,
-      "declaredVersion": "Stable; no exact patch declared"
+      "declaredVersion": "Stable; no exact patch declared",
+      "fetchVerifiedThisAudit": true,
+      "previousRawSha256": "8c09e085cb8fe7fc08fbec34f92a67b35c78054159615eae6b0cca5c8451de52",
+      "productionSectionsUnchanged": {
+        "buildingsData": true,
+        "itemsData": true,
+        "toolsData": true,
+        "recipesData": true,
+        "schematicsData": true
+      },
+      "canonicalSectionSha256": {
+        "buildingsData": "dd35a939027869665d745c1269d7668bf25443dd6a53b224b022ad6f92c1186b",
+        "itemsData": "88bae2979b6968f136ffa628fd1f47a74c186d4bbcf9c76d36f6ca141ef51cd4",
+        "toolsData": "addf62066a224a46a6c0bfd9af3d714ce7076240f3cacb96d9fb690cf2c8d423",
+        "recipesData": "5dccbf2d0b7f0c519cdad755acf611b7ba082d292288580976156bcc243db613",
+        "schematicsData": "c91eb7c05ec01cab2db05a41ca45320777f3507d80b72946a8c7118c5731b3ad"
+      },
+      "rawHashChangeReason": "Only mod load counters and timestamps changed in modsData; all production data is identical"
     },
     {
       "id": "sft-version-index",
       "label": "SatisfactoryTools version index",
       "url": "https://api.new.satisfactorytools.com/v1/versions",
-      "fetchedAt": "2026-11-23T12:50:36.684207+00:00",
+      "fetchedAt": "2026-11-23T17:48:48.871681+00:00",
       "sha256": "0914ad5ad479dbbe0da2da971305b96ab833367d956d1c8c6cfc646239a58161",
-      "bytes": 3370
+      "bytes": 3370,
+      "fetchVerifiedThisAudit": true
     },
     {
       "id": "sft-stable",
       "label": "SatisfactoryTools 1.2.5.0 Stable",
       "url": "https://api.new.satisfactorytools.com/data/versions/stable-26281294.json",
-      "fetchedAt": "2026-11-23T12:51:25.766236+00:00",
+      "fetchedAt": "2026-11-23T17:48:50.056011+00:00",
       "sha256": "24899923b1beec190edc3e1d3897b228b6be7fbe72beabd4bf15a101c8d23e83",
       "bytes": 2904914,
       "declaredVersion": "1.2.5.0",
       "buildId": "26281294",
-      "buildIdKind": "dataset/Steam build; not the game changelist"
+      "buildIdKind": "dataset/Steam build; not the game changelist",
+      "fetchVerifiedThisAudit": true,
+      "importedAt": "2026-11-06T12:16:26+01:00"
     },
     {
       "id": "sft-ficsmas",
       "label": "SatisfactoryTools 1.2.5.0 FICSMAS",
       "url": "https://api.new.satisfactorytools.com/data/versions/stable-26281294-ficsmas.json",
-      "fetchedAt": "2026-11-23T12:51:34.782242+00:00",
+      "fetchedAt": "2026-11-23T17:48:50.515395+00:00",
       "sha256": "728c0af750a3561d1fc2ede384583019c025a4feeab5526ac3578e93cf940934",
       "bytes": 3005111,
       "declaredVersion": "1.2.5.0",
       "buildId": "26281294",
-      "buildIdKind": "dataset/Steam build; not the game changelist"
+      "buildIdKind": "dataset/Steam build; not the game changelist",
+      "fetchVerifiedThisAudit": true,
+      "importedAt": "2026-11-06T12:16:26+01:00"
     },
     {
       "id": "game-docs",
@@ -151,9 +184,16 @@
       "sha256": "2351035c70bfe83374eefe048ec292364ff3e9867698e2477a01c3a297584a73",
       "bytes": 10643994,
       "gitBlobSha": "384542140533f0d3baf433a3e7d8e74ca9c4972d",
-      "mirrorCheckedAt": "2026-11-23T12:56:05.816Z",
+      "mirrorCheckedAt": "2026-11-23T17:49:28.516964+00:00",
       "mirrorCheckUrl": "https://api.github.com/repos/0xjc/SatisfactoryLP/commits?path=Docs.json&per_page=3",
-      "latestDocsCommit": "9a38fc1b383586d2c1dcf46a070e8f1bd3e60f4b"
+      "latestDocsCommit": "9a38fc1b383586d2c1dcf46a070e8f1bd3e60f4b",
+      "previousMirrorCheckedAt": "2026-11-23T12:56:05.816Z",
+      "currentFileUrl": "https://github.com/0xjc/SatisfactoryLP/blob/9a38fc1b383586d2c1dcf46a070e8f1bd3e60f4b/Docs.json",
+      "currentFileCheckUrl": "https://api.github.com/repos/0xjc/SatisfactoryLP/contents/Docs.json?ref=9a38fc1b383586d2c1dcf46a070e8f1bd3e60f4b",
+      "currentFileCheckedAt": "2026-11-23T17:50:04.761804+00:00",
+      "cachedFileMatchesCurrentMirrorBlob": true,
+      "verificationMethod": "Reused previously downloaded original 1.2.3.1 Docs bytes; fresh GitHub API checks confirm the latest mirror commit still contains the identical Git blob",
+      "comparisonRepeatedAt": "2026-11-23T17:49:23.093904+00:00"
     },
     {
       "id": "sft-power-semantics",
@@ -163,7 +203,9 @@
       "sha256": "1f64fff0057aa567cb4f32eb51f6923b9b69da276ac8bf6acb16d53c49fdb36e",
       "bytes": 3786,
       "commit": "0e0a191984f7d1313549b844e423f47497440b8f",
-      "browseUrl": "https://github.com/SatisfactoryTools/SFTools/blob/0e0a191984f7d1313549b844e423f47497440b8f/src/app/Model/Planner/Formulas.ts"
+      "browseUrl": "https://github.com/SatisfactoryTools/SFTools/blob/0e0a191984f7d1313549b844e423f47497440b8f/src/app/Model/Planner/Formulas.ts",
+      "fetchVerifiedThisAudit": false,
+      "verificationMethod": "Previously downloaded pinned source retained; its fetch date is unchanged"
     },
     {
       "id": "release-notes",
@@ -173,7 +215,65 @@
       "sha256": "0528cd14b1bb8c2cb7d18baac2798197a4839fa6be2b30c8b7ee2bcf15e3e10e",
       "bytes": 37450,
       "declaredVersion": "1.2.5.1",
-      "snapshotFormat": "HTML; hash identifies the fetched page, including its presentation"
+      "snapshotFormat": "HTML; hash identifies the fetched page, including its presentation",
+      "fetchVerifiedThisAudit": false,
+      "verificationMethod": "Earlier HTML snapshot retained; latest release reconfirmed using the fresh official Steam news API listed separately"
+    },
+    {
+      "id": "steam-news-current",
+      "label": "Official Steam news API",
+      "url": "https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=526870&count=20&maxlength=0",
+      "fetchedAt": "2026-11-23T17:50:02.266616+00:00",
+      "sha256": "a0ae7287ce958f9ca347c702e532fab747583f500fbc38a1a6557a2c6ad92dbb",
+      "bytes": 77319,
+      "announcementTitle": "Satisfactory Update v1.2.5.1",
+      "announcementId": "1849827110424942",
+      "announcementUrl": "https://steamstore-a.akamaihd.net/news/externalpost/steam_community_announcements/1849827110424942",
+      "declaredVersion": "1.2.5.1",
+      "fetchVerifiedThisAudit": true
     }
-  ]
+  ],
+  "wetConcrete": {
+    "recipeId": "Recipe_Alternate_WetConcrete_C",
+    "name": "Alternate: Wet Concrete",
+    "nameRu": "Альт.: сырой бетон",
+    "buildingId": "Build_OilRefinery_C",
+    "building": "Refinery",
+    "alternate": true,
+    "clockPercent": 100,
+    "somersloopMultiplier": 1,
+    "secondsPerCraft": 3,
+    "craftsPerMinute": 20,
+    "inputsPerCraft": {
+      "Desc_Stone_C": 6,
+      "Desc_Water_C": 5
+    },
+    "outputsPerCraft": {
+      "Desc_Cement_C": 4
+    },
+    "inputsPerMinute": {
+      "Desc_Stone_C": 120,
+      "Desc_Water_C": 100
+    },
+    "outputsPerMinute": {
+      "Desc_Cement_C": 80
+    },
+    "units": {
+      "Desc_Stone_C": "items",
+      "Desc_Water_C": "m3",
+      "Desc_Cement_C": "items"
+    },
+    "powerMW": 30,
+    "rawScimWaterAmountPerCraft": 5000,
+    "rawScimFluidUnitScale": 1000,
+    "matchesSources": [
+      "scim-stable",
+      "sft-stable",
+      "sft-ficsmas",
+      "game-docs"
+    ],
+    "existingRecipeRecordAlreadyMatched": true,
+    "numericRecipeChangesRequired": false,
+    "scope": "Recipe data only; the cause of different numbers observed in the user installation is not established by this audit"
+  }
 }
