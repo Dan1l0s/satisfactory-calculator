@@ -13,16 +13,14 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  build:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    outputs:
+      artifact_id: ${{ steps.pages.outputs.artifact_id }}
     steps:
       - name: Check out source
         uses: actions/checkout@v6
@@ -45,10 +43,131 @@ jobs:
         uses: actions/configure-pages@v5
 
       - name: Upload static site
+        id: pages
         uses: actions/upload-pages-artifact@v4
         with:
           path: dist
+          name: github-pages
 
-      - name: Deploy to GitHub Pages
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy uploaded Pages artifact
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/github-script@v9
+        env:
+          PAGES_ARTIFACT_ID: ${{ needs.build.outputs.artifact_id }}
+        with:
+          debug: false
+          retries: 0
+          script: |
+            const artifactId = Number(process.env.PAGES_ARTIFACT_ID);
+            if (!Number.isSafeInteger(artifactId) || artifactId <= 0) {
+              throw new Error('Build did not return a valid artifact ID');
+            }
+
+            const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+            const request = async (route, params = {}) => {
+              try {
+                return await github.request(route, {
+                  ...context.repo,
+                  ...params,
+                  headers: { 'X-GitHub-Api-Version': '2026-03-10' },
+                  request: { timeout: 30000 }
+                });
+              } catch (error) {
+                const failure = new Error(
+                  `GitHub API ${route}: HTTP ${error.status || 'network error'}`
+                );
+                failure.status = error.status;
+                throw failure;
+              }
+            };
+
+            const { data: artifact } = await request(
+              'GET /repos/{owner}/{repo}/actions/artifacts/{artifact_id}',
+              { artifact_id: artifactId }
+            );
+            if (artifact.expired || artifact.name !== 'github-pages' ||
+                Number(artifact.workflow_run?.id) !== context.runId ||
+                artifact.workflow_run?.head_sha !== context.sha) {
+              throw new Error('Artifact does not match this workflow run and commit');
+            }
+            core.info(`Publishing artifact ${artifactId} from run ${context.runId}`);
+
+            const idToken = await core.getIDToken();
+            core.setSecret(idToken);
+            const { data: deployment } = await request(
+              'POST /repos/{owner}/{repo}/pages/deployments',
+              {
+                artifact_id: artifactId,
+                pages_build_version: context.sha,
+                oidc_token: idToken
+              }
+            );
+            if (!deployment.id) {
+              throw new Error('Pages API did not return a deployment ID');
+            }
+
+            const params = { pages_deployment_id: deployment.id };
+            const terminalFailures = new Set([
+              'deployment_failed', 'deployment_content_failed',
+              'deployment_cancelled', 'deployment_lost'
+            ]);
+            const deadline = Date.now() + 600000;
+            let pending = true;
+            let errors = 0;
+
+            try {
+              while (Date.now() < deadline) {
+                await wait(5000);
+                let result;
+                try {
+                  result = await request(
+                    'GET /repos/{owner}/{repo}/pages/deployments/{pages_deployment_id}',
+                    params
+                  );
+                  errors = 0;
+                } catch (error) {
+                  const transient = !error.status || error.status === 404 ||
+                    error.status === 429 || error.status >= 500;
+                  if (!transient || ++errors >= 5) throw error;
+                  core.warning(error.message);
+                  continue;
+                }
+
+                const status = result.data.status;
+                core.info(`Pages deployment: ${status}`);
+                if (status === 'succeed') {
+                  pending = false;
+                  core.setOutput('page_url', deployment.page_url);
+                  core.info(`Published: ${deployment.page_url}`);
+                  return;
+                }
+                if (terminalFailures.has(status)) {
+                  pending = false;
+                  throw new Error(`Pages deployment failed: ${status}`);
+                }
+              }
+              throw new Error('Pages deployment timed out after 10 minutes');
+            } finally {
+              if (pending) {
+                try {
+                  await request(
+                    'POST /repos/{owner}/{repo}/pages/deployments/{pages_deployment_id}/cancel',
+                    params
+                  );
+                } catch (error) {
+                  core.warning(`Could not cancel pending deployment: ${error.message}`);
+                }
+              }
+            }
