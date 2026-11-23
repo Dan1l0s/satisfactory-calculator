@@ -1,4 +1,12 @@
-import { createGraph } from './graph.js';
+import { createGraph, buildFlowData } from './graph.js';
+import {
+  normalizeProgress,
+  normalizeProgressSignatures,
+  setNodeProgress,
+  progressCounts,
+  progressFilterValue,
+  reconcileProgress,
+} from './construction-progress.js';
 import {
   BELT_TIERS,
   PIPE_TIERS,
@@ -98,8 +106,12 @@ const defaultState = () => ({
   clock: 100,
   minerClock: 100,
   imports: [],
-  language: 'both',
+  language: 'en-ru',
+  languageOrderVersion: 2,
   compactGraph: false,
+  progress: {},
+  progressSignatures: {},
+  progressFilter: 'unfinished',
 });
 let data,
   itemMap,
@@ -111,6 +123,7 @@ let data,
   dependencies,
   selected,
   activeTab = 'graph';
+let progressFlow = { nodes: [], edges: [] };
 let worker,
   nextRequest = 1,
   solveGeneration = 0,
@@ -252,8 +265,14 @@ function normalizeState(raw, { source = 'json' } = {}) {
   s.beltTier = BELT_TIERS.some((t) => t.tier === Number(raw.beltTier)) ? Number(raw.beltTier) : 5;
   s.pipeTier = PIPE_TIERS.some((t) => t.tier === Number(raw.pipeTier)) ? Number(raw.pipeTier) : 2;
   s.defaultPurity = [0.5, 1, 2].includes(Number(raw.defaultPurity)) ? Number(raw.defaultPurity) : 1;
-  s.language = ['both', 'ru', 'en', 'en-ru'].includes(raw.language) ? raw.language : 'both';
+  const oldLocalDefault = source === 'localStorage' && raw.language === 'both' && raw.languageOrderVersion !== 2;
+  s.language = oldLocalDefault ? 'en-ru'
+    : ['en-ru', 'both', 'en', 'ru'].includes(raw.language) ? raw.language : 'en-ru';
+  s.languageOrderVersion = 2;
   s.compactGraph = raw.compactGraph === true;
+  s.progress = normalizeProgress(raw.progress);
+  s.progressSignatures = normalizeProgressSignatures(raw.progressSignatures);
+  s.progressFilter = progressFilterValue(raw.progressFilter);
   if (raw.resourceSettings && typeof raw.resourceSettings === 'object')
     for (const r of data.resources) {
       const source = raw.resourceSettings[r.itemId];
@@ -411,6 +430,7 @@ function showRecipeStart() {
   $('metric-alternates').textContent = 'После выбора рецептов';
   $('energy-note').textContent = 'производство + добыча';
   $('nuclear-energy').hidden = true;
+  $('progress-empty').hidden = true;
   $('plan-notes').innerHTML = '';
   $('graph-summary').textContent = 'Сначала выберите набор рецептов';
   for (const id of ['view-build', 'view-balance', 'view-compare']) $(id).innerHTML = '';
@@ -420,6 +440,7 @@ function showRecipeStart() {
     pipeTier: state.pipeTier,
   });
   setStatus('Выберите набор рецептов');
+  updateProgressControls();
   $('graph-empty').hidden = false;
   $('graph-empty').classList.add('recipe-start');
   $('graph-empty').innerHTML =
@@ -465,12 +486,20 @@ async function calculate() {
       return;
     }
     comparisonCache[state.objective] = result;
-    graph.setData(data, result);
+    progressFlow = buildFlowData(data, result);
+    const progressReview = reconcileProgress(state.progress, state.progressSignatures, progressFlow.nodes, progressFlow.edges);
+    state.progress = progressReview.progress;
+    state.progressSignatures = progressReview.signatures;
+    graph.setData(data, result, { progress: state.progress, progressFilter: state.progressFilter });
     graph.clearFocus();
     graph.setLanguage(state.language);
     $('graph-empty').hidden = true;
     setStatus('Баланс проверен');
     renderResult();
+    save();
+    const changedProgress = progressReview.resetIds.length + progressReview.downgradedIds.length;
+    if (changedProgress)
+      toast(`План изменился: перепроверьте готовность ${changedProgress} узлов. Изменённые подключения отмечены как построенные`);
     if (activeTab === 'compare') renderComparison();
   } catch (error) {
     if (generation !== solveGeneration) return;
@@ -488,6 +517,7 @@ function showFailure(message) {
   $('metric-recipes').textContent = '-';
   $('metric-alternates').textContent = 'Проверьте ограничения';
   $('nuclear-energy').hidden = true;
+  $('progress-empty').hidden = true;
   $('graph-empty').classList.remove('recipe-start');
   $('graph-empty').hidden = false;
   $('graph-empty').innerHTML =
@@ -505,6 +535,7 @@ function showFailure(message) {
   });
   $('plan-notes').innerHTML = '';
   renderUsedAlternates();
+  updateProgressControls();
   if (drawerMode === 'recipes' && $('settings-dialog').open) fillRecipeList();
 }
 function renderControls() {
@@ -535,6 +566,9 @@ function renderControls() {
   $('language').value = state.language;
   $('graph-detail').value = state.compactGraph ? 'compact' : 'full';
   graph.setCompact(state.compactGraph);
+  graph.setProgress(state.progress);
+  graph.setProgressFilter(state.progressFilter);
+  updateProgressControls();
   $('miner-tier').value = state.minerTier;
   $('default-purity').value = state.defaultPurity;
   const belt = BELT_TIERS.find((t) => t.tier === state.beltTier),
@@ -1284,12 +1318,67 @@ function selectNode(node) {
   selected = node;
   renderInspector();
 }
+function updateProgressControls() {
+  const available = result?.status === 'optimal';
+  const counts = progressCounts(state.progress, available ? progressFlow.nodes.map((node) => node.id) : []);
+  document.querySelectorAll('[data-progress-filter]').forEach((button) => {
+    const active = button.dataset.progressFilter === state.progressFilter;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', String(active));
+    button.disabled = !available;
+  });
+  $('progress-count').textContent = available ? `Готово ${counts.connected} / ${counts.total}` : 'Готовность участков';
+  const graphCounts = graph?.getCounts();
+  const empty = available && state.progressFilter === 'unfinished' && counts.total > 0 && graphCounts?.visibleNodes === 0;
+  $('progress-empty').hidden = !empty;
+  if (empty) {
+    $('progress-empty-title').textContent = counts.connected === counts.total ? 'Все узлы готовы' : 'В этом участке всё готово';
+    $('progress-empty-note').textContent = 'Отметки сохранены, все производства продолжают участвовать в расчёте';
+    $('progress-clear-focus').hidden = !graphCounts.focus;
+  }
+}
+function setProgressFilter(filter) {
+  state.progressFilter = progressFilterValue(filter);
+  graph.setProgressFilter(state.progressFilter);
+  if (state.progressFilter === 'unfinished' && state.progress[selected?.id] === 'connected') {
+    $('inspector').hidden = true;
+    selected = null;
+  }
+  updateGraphSummary();
+  persistChange();
+}
+function setConstructionProgress(nodeId, status) {
+  if (isSolving || result?.status !== 'optimal') {
+    toast('Дождитесь завершения расчёта');
+    return;
+  }
+  if (!progressFlow.nodes.some((node) => node.id === nodeId)) return;
+  const next = setNodeProgress(state.progress, nodeId, status);
+  const review = reconcileProgress(next, state.progressSignatures, progressFlow.nodes, progressFlow.edges);
+  state.progress = review.progress;
+  state.progressSignatures = review.signatures;
+  graph.setProgress(state.progress);
+  if (selected?.id === nodeId) {
+    if (state.progressFilter === 'unfinished' && state.progress[nodeId] === 'connected') {
+      selected = null;
+      $('inspector').hidden = true;
+    } else renderInspector();
+  }
+  updateGraphSummary();
+  persistChange();
+}
+function revealProgressNode(nodeId) {
+  if (state.progressFilter === 'unfinished' && state.progress[nodeId] === 'connected')
+    setProgressFilter('all');
+}
 function updateGraphSummary() {
   const c = graph.getCounts();
   $('graph-summary').textContent = c.focus
     ? `Участок: ${c.visibleNodes} из ${c.nodes} узлов`
-    : `${c.nodes} узлов / ${c.edges} потоков`;
+    : c.hiddenNodes > 0 ? `${c.visibleNodes} из ${c.nodes} узлов / готовые скрыты`
+      : `${c.nodes} узлов / ${c.edges} потоков`;
   $('clear-focus').hidden = !c.focus;
+  updateProgressControls();
 }
 function updateGraphView(view) {
   const percent = Math.round(view.zoom * 100);
@@ -1399,12 +1488,20 @@ function renderInspector() {
       target: 'ЦЕЛЕВОЙ ВЫПУСК',
       surplus: 'ПОБОЧНЫЙ ПРОДУКТ',
     }[node.kind] || '';
+  const nodeProgress = state.progress[node.id] || 'unstarted';
+  const progressControl = progressFlow.nodes.some((entry) => entry.id === node.id)
+    ? `<section class="inspector-progress"><h3>Готовность участка</h3>
+       <div class="progress-status-options" role="group" aria-label="Готовность выбранного участка">
+         ${[['unstarted', 'Не начато'], ['built', 'Построено'], ['connected', 'Подключено']].map(([status, label]) => `<button class="progress-status ${status === nodeProgress ? 'active' : ''}" data-node-progress="${status}" data-progress-node="${esc(node.id)}" aria-pressed="${status === nodeProgress}">${status === 'connected' ? icon('check') : ''}${label}</button>`).join('')}
+       </div><p>Подключённый участок считается готовым и скрывается в режиме «Не готовые»</p></section>`
+    : '';
   $('inspector').innerHTML = `
     <div class="inspector-header">
       <span>${itemIcon(item || itemMap.get(Object.keys(outputs)[0] || Object.keys(inputs)[0]))}</span>
       <div><div class="eyebrow">${type}</div>${dual(title)}</div>
       <button class="icon-button" id="close-inspector" aria-label="Закрыть детали">${icon('close')}</button>
     </div>
+    ${progressControl}
     ${recipe ? `<div class="inspector-building">${itemIcon(buildingMap.get(recipe.buildingId))}${dual(buildingMap.get(recipe.buildingId))}</div>` : ''}
     ${totalFlows}
     ${recipeFlows}
@@ -1432,10 +1529,9 @@ function renderInspector() {
       (b) =>
         (b.onclick = () => {
           graph.setFocus(node.id, b.dataset.focus);
-          $('clear-focus').hidden = false;
           $('inspector').hidden = true;
-          const c = graph.getCounts();
-          $('graph-summary').textContent = `Фокус: ${c.visibleNodes} из ${c.nodes} узлов`;
+          selected = null;
+          updateGraphSummary();
         }),
     );
   if (recipe) {
@@ -1552,6 +1648,10 @@ function exportCSV(rows, filename) {
 
 function installEvents() {
   document.addEventListener('click', (event) => {
+    const filter = event.target.closest('[data-progress-filter]');
+    if (filter) setProgressFilter(filter.dataset.progressFilter);
+    const progress = event.target.closest('[data-node-progress]');
+    if (progress) setConstructionProgress(progress.dataset.progressNode, progress.dataset.nodeProgress);
     const objective = event.target.closest('[data-objective]');
     if (objective && objective.dataset.objective !== state.objective) {
       state.objective = objective.dataset.objective;
@@ -1600,6 +1700,7 @@ function installEvents() {
     }
     const sf = event.target.closest('[data-search-focus]');
     if (sf) {
+      revealProgressNode(sf.dataset.searchFocus);
       graph.setFocus(sf.dataset.searchFocus, 'neighbors');
       $('graph-search-results').hidden = true;
       $('graph-search').value = '';
@@ -1692,6 +1793,7 @@ function installEvents() {
   };
   $('language').onchange = (event) => {
     state.language = event.target.value;
+    state.languageOrderVersion = 2;
     persistChange();
     renderControls();
     graph.setLanguage(state.language);
@@ -1803,11 +1905,25 @@ function installEvents() {
     graph.clearFocus();
     $('inspector').hidden = true;
     selected = null;
+    const destinations = progressFlow.nodes.filter((node) => destination === 'target'
+      ? node.kind === 'target' : node.kind === 'resource' || node.kind === 'import');
+    if (destinations.length && destinations.every((node) => state.progress[node.id] === 'connected'))
+      setProgressFilter('all');
     destination === 'start' ? graph.centerStart() : graph.centerTarget();
     updateGraphSummary();
   };
   $('graph-start').onclick = () => navigateGraph('start');
   $('graph-target').onclick = () => navigateGraph('target');
+  $('progress-show-all').onclick = () => {
+    graph.clearFocus();
+    setProgressFilter('all');
+    graph.centerTarget();
+  };
+  $('progress-clear-focus').onclick = () => {
+    graph.clearFocus();
+    updateGraphSummary();
+    graph.fit();
+  };
   $('graph-spacing').onchange = (event) => graph.setSpacing(event.target.value);
   $('graph-detail').onchange = (event) => {
     state.compactGraph = event.target.value === 'compact';
@@ -1848,8 +1964,14 @@ function installEvents() {
   $('export-project').onclick = () =>
     download(JSON.stringify(persistentState(), null, 2), 'factory-lens-plan.json');
   $('share-project').onclick = async () => {
+    const plan = persistentState(), encoded = encodePlan(plan);
+    if (encoded.length > 150000) {
+      download(JSON.stringify(plan, null, 2), 'factory-lens-plan.json');
+      toast('План с отметками слишком большой для ссылки и сохранён в JSON');
+      return;
+    }
     const url = new URL(location.href);
-    url.hash = `plan=${encodePlan(persistentState())}`;
+    url.hash = `plan=${encoded}`;
     try {
       await navigator.clipboard.writeText(url.href);
       toast('Ссылка на план скопирована. Получателю нужен доступ к странице');
@@ -1909,12 +2031,17 @@ async function main() {
     graph = createGraph($('graph-canvas'), {
       onSelect: selectNode,
       onViewChange: updateGraphView,
+      onProgressChange: setConstructionProgress,
+      language: state.language,
       compact: state.compactGraph,
+      progress: state.progress,
+      progressFilter: state.progressFilter,
     });
     graph.setLanguage(state.language);
     dependencies = createDependencyView($('view-dependencies'), {
       onShowGraph: (nodeId) => {
         switchTab('graph');
+        revealProgressNode(nodeId);
         graph.clearFocus();
         graph.centerNode(nodeId);
         $('inspector').hidden = true;

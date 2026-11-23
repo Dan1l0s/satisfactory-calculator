@@ -32,10 +32,10 @@
         >
         <label class="sr-only" for="language">Язык названий</label
         ><select id="language" class="language-select" aria-label="Язык названий">
-          <option value="both">RU + EN</option>
           <option value="en-ru">EN + RU</option>
-          <option value="ru">Русский</option>
-          <option value="en">English</option>
+          <option value="both">RU + EN</option>
+          <option value="en">EN</option>
+          <option value="ru">RU</option>
         </select>
         <button class="button ghost icon-mobile" id="export-project" title="Скачать план в JSON">
           <span data-icon="download"></span><span class="button-label">Экспорт</span>
@@ -251,6 +251,13 @@
                 </div>
                 <div id="graph-search-results" class="graph-search-results" hidden></div>
               </div>
+              <div class="graph-progress">
+                <span id="progress-count" aria-live="polite">Готово 0 / 0</span>
+                <div class="progress-filter" role="group" aria-label="Показывать узлы по готовности">
+                  <button data-progress-filter="all" aria-pressed="false">Все</button>
+                  <button data-progress-filter="unfinished" class="active" aria-pressed="true">Не готовые</button>
+                </div>
+              </div>
               <label class="graph-detail"
                 ><span>Вид</span
                 ><select id="graph-detail" aria-label="Вид производственной схемы">
@@ -266,7 +273,7 @@
                 </select></label
               >
               <div class="graph-tools">
-                <button id="clear-focus" class="button small subtle" hidden>Все процессы</button
+                <button id="clear-focus" class="button small subtle" hidden>Снять фокус</button
                 ><button id="graph-transport" class="button small ghost" title="Конвейеры и трубы">
                   <span data-icon="settings"></span>Логистика</button
                 ><button
@@ -312,6 +319,15 @@
                 <p>Рассчитываем рецепты, ресурсы и потоки</p>
               </div>
               <aside class="inspector" id="inspector" hidden></aside>
+              <div id="progress-empty" class="progress-empty" hidden>
+                <span data-icon="check"></span>
+                <strong id="progress-empty-title">Все узлы готовы</strong>
+                <p id="progress-empty-note">Отметки сохранены</p>
+                <div>
+                  <button class="button subtle" id="progress-show-all">Показать все</button>
+                  <button class="button ghost" id="progress-clear-focus" hidden>Снять фокус</button>
+                </div>
+              </div>
               <div class="graph-zoom">
                 <button id="zoom-out" aria-label="Отдалить"><span data-icon="minus"></span></button
                 ><button id="zoom-value" aria-label="Вернуть масштаб 100%">100%</button

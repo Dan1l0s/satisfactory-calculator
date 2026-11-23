@@ -928,6 +928,64 @@ button.metric:hover {
   gap: 9px;
   margin: 14px 0;
 }
+.inspector-progress {
+  padding-bottom: 16px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid #3b4855;
+}
+.inspector-progress h3 {
+  margin: 0 0 10px;
+  color: #e6eef4;
+  font-size: 15px;
+  font-weight: 600;
+}
+.progress-status-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.progress-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 36px;
+  padding: 7px 9px;
+  background: #131d25;
+  border: 1px solid #465966;
+  border-radius: 6px;
+  color: #b8cbd7;
+  font-size: 13px;
+}
+.progress-status:hover {
+  background: #273844;
+  color: #f0f6fa;
+}
+.progress-status.active {
+  background: #30404d;
+  border-color: #8ba4b7;
+  color: #f0f6fa;
+}
+.progress-status.active[data-node-progress="built"] {
+  background: #3b3222;
+  border-color: #b69351;
+  color: #f1d596;
+}
+.progress-status.active[data-node-progress="connected"] {
+  background: #1c3b31;
+  border-color: #65b599;
+  color: #b9efda;
+}
+.progress-status svg {
+  width: 14px;
+  height: 14px;
+}
+.inspector-progress p {
+  color: #9eb3c2;
+  font-size: 12px;
+  line-height: 1.55;
+  margin: 10px 0 0;
+}
 .mini-metric {
   background: #131c23;
   padding: 10px;
@@ -2531,6 +2589,87 @@ dialog::backdrop {
 .graph-detail select {
   width: 138px;
 }
+.graph-progress {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+#progress-count {
+  font-size: 12px;
+  color: #abc6b9;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.progress-filter {
+  display: inline-flex;
+  padding: 3px;
+  gap: 3px;
+  border: 1px solid #425762;
+  border-radius: 7px;
+  background: #111b22;
+}
+.progress-filter button {
+  min-height: 30px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 5px 9px;
+  font-size: 13px;
+  color: #a9bfcd;
+  white-space: nowrap;
+  background: transparent;
+}
+.progress-filter button:hover:not(:disabled) {
+  color: #eef6f5;
+  background: #263a3c;
+}
+.progress-filter button.active {
+  background: #28483e;
+  border-color: #4c806d;
+  color: #d5f0e5;
+}
+.progress-filter button:disabled {
+  opacity: .5;
+  cursor: default;
+}
+.progress-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 30px;
+  background: #111b22f2;
+  color: #dbefe5;
+  text-align: center;
+}
+.progress-empty > span svg {
+  width: 40px;
+  height: 40px;
+  padding: 8px;
+  border: 1px solid #568e78;
+  border-radius: 50%;
+  background: #203c31;
+  color: #a1dfbf;
+}
+.progress-empty strong {
+  font-size: 22px;
+}
+.progress-empty p {
+  max-width: 420px;
+  margin: 0;
+  color: #a8c1b5;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.progress-empty > div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
 .graph-tools {
   gap: 7px;
 }
@@ -3470,6 +3609,10 @@ dialog::backdrop {
   .graph-toolbar {
     padding: 9px;
     gap: 8px;
+  }
+  .graph-progress {
+    flex: 1 0 100%;
+    justify-content: space-between;
   }
   .graph-search-wrap {
     min-width: 150px;

@@ -9,7 +9,9 @@ const PORT_HEADER = 218;
 const PORT_STEP = 112;
 const LABEL_WIDTH = 300;
 const LABEL_HEIGHT = 112;
-const COMPACT_LABEL_HEIGHT = 64;
+const COMPACT_LABEL_HEIGHT = 80;
+const PORT_CONTENT_WIDTH = WIDTH / 2 - 28;
+const PROGRESS_FOOTER = 32;
 const LANE_WIDTH = 9;
 const LANE_PITCH = 13;
 const MAX_DRAWN_LANES = 6;
@@ -946,7 +948,7 @@ export function layoutFlow(nodesInput, edgesInput, options = {}) {
       input.reduce((sum, e) => sum + e.portPitch, 0),
       output.reduce((sum, e) => sum + e.portPitch, 0),
     );
-    node.height = node.portHeader + node.portArea + 24;
+    node.height = node.portHeader + node.portArea + 24 + PROGRESS_FOOTER;
   }
   const { components, componentFor } = strongComponents(nodes, edges);
   const componentOrders = components.map((ids) => orderComponent(ids, map, edges));
@@ -1339,6 +1341,19 @@ const styles = `
 .fl-graph .port-rate{fill:#edf2f6;font-size:26px;font-weight:750;font-variant-numeric:tabular-nums;pointer-events:none}
 .fl-graph .port-unit{fill:#9cacba;font-size:12px;pointer-events:none}
 .fl-graph .node-divider{stroke:#34404a;stroke-width:1;pointer-events:none}
+.fl-graph .port-divider{stroke:#586d7c;stroke-width:1.5;pointer-events:none}
+.fl-graph .node.fl-built .node-card{stroke:#ae8e58;stroke-width:2}
+.fl-graph .node.fl-connected .node-card{stroke:#69ad8d;stroke-width:2}
+.fl-graph .node-progress{cursor:pointer;outline:none}
+.fl-graph .node-progress rect{fill:#1a2832;stroke:#405767;stroke-width:1}
+.fl-graph .node-progress:focus rect,.fl-graph .node-progress:hover rect{stroke:#e3b37e;stroke-width:2}
+.fl-graph .node-progress text{fill:#b9cad5;font-size:13px;font-weight:600;pointer-events:none}
+.fl-graph .fl-built .node-progress rect{fill:#342d20;stroke:#8c744a}
+.fl-graph .fl-built .node-progress text{fill:#efcb8b}
+.fl-graph .fl-connected .node-progress rect{fill:#1b362c;stroke:#5d9c7d}
+.fl-graph .fl-connected .node-progress text{fill:#a9e0c2}
+.fl-graph .completed-boundary circle{fill:#1c3b2e;stroke:#82c9a0;stroke-width:1.5}
+.fl-graph .completed-boundary text{fill:#bce7cd;font-size:17px;font-weight:700;pointer-events:none}
 .fl-graph .node-port{stroke:#10151a;stroke-width:2;pointer-events:none}
 .fl-graph .edge-label{opacity:1;cursor:pointer}
 .fl-graph .edge-label .label-panel{fill:#121b23;stroke:#35434e;stroke-width:1;rx:7}
@@ -1365,9 +1380,12 @@ const styles = `
 
 export function createGraph(
   container,
-  { onSelect, onViewChange, language: initialLanguage = 'both', compact: initialCompact = false } = {},
+  { onSelect, onViewChange, onProgressChange, language: initialLanguage = 'en-ru', compact: initialCompact = false,
+    progress: initialProgress = {}, progressFilter: initialProgressFilter = 'unfinished' } = {},
 ) {
   if (!container) throw new Error('Graph container is required');
+  const copyProgress = (value) => Object.fromEntries(Object.entries(value || {})
+    .filter(([, status]) => status === 'built' || status === 'connected'));
   let full = { nodes: [], edges: [], itemMap: new Map(), diagnostics: [] },
     layout = { nodes: [], edges: [], bounds: { x: 0, y: 0, width: 600, height: 400 } };
   let projected = full,
@@ -1377,7 +1395,9 @@ export function createGraph(
   let spacing = 360,
     compact = initialCompact === true,
     transportSettings = { beltTier: 5, pipeTier: 2 },
-    outputAnchorId = null;
+    outputAnchorId = null,
+    progress = copyProgress(initialProgress),
+    progressFilter = initialProgressFilter === 'all' ? 'all' : 'unfinished';
   let selectedId = null,
     focus = null,
     language = initialLanguage,
@@ -1477,6 +1497,9 @@ export function createGraph(
     name: node.name,
     data: node.data,
   });
+  const isHidden = (nodeId) => progressFilter === 'unfinished' && progress[nodeId] === 'connected';
+  const visibleNodes = () => layout.nodes.filter((node) => !isHidden(node.id));
+  const visibleEdges = () => layout.edges.filter((edge) => !isHidden(edge.source) || !isHidden(edge.target));
   function updateView() {
     world.setAttribute('transform', `translate(${view.x} ${view.y}) scale(${view.scale})`);
     updateReadability();
@@ -1497,7 +1520,7 @@ export function createGraph(
     element.style.fontSize = `${size}px`;
     if (typeof element.getComputedTextLength !== 'function') return;
     const length = element.getComputedTextLength();
-    if (length > width) element.style.fontSize = `${Math.max(12, size * width / length)}px`;
+    if (length > width) element.style.fontSize = `${Math.max(6, size * width / length)}px`;
   }
   function updateReadability() {
     if (readabilityScale === view.scale) return;
@@ -1512,9 +1535,11 @@ export function createGraph(
         element.setAttribute('transform', `translate(${(edge.labelBox.width - 144 * factor) / 2} ${edge.labelBox.height - 32 * factor}) scale(${factor})`);
     }
     for (const element of nodeLayer.querySelectorAll('.port-rate'))
-      fitValue(element, (WIDTH - 40) / 2, Math.min(48, Math.max(compact ? 30 : 26, 12 / view.scale)));
+      fitValue(element, PORT_CONTENT_WIDTH, Math.min(40, Math.max(compact ? 30 : 26, 12 / view.scale)));
     for (const element of nodeLayer.querySelectorAll('.node-machines'))
       fitValue(element, compact ? 164 : 140, Math.min(48, Math.max(compact ? 40 : 30, 12 / view.scale)));
+    for (const element of nodeLayer.querySelectorAll('.node-rate'))
+      fitValue(element, Number(element.getAttribute('data-fit-width')) || WIDTH - 32, compact ? 34 : 22);
   }
   function resize() {
     if (destroyed) return;
@@ -1537,7 +1562,7 @@ export function createGraph(
     for (const text of nodeLayer.querySelectorAll('.node-building,.node-building-en'))
       fitLabel(text, WIDTH - 90);
     for (const text of nodeLayer.querySelectorAll('.port-name'))
-      fitLabel(text, (WIDTH - 32) / 2 - 38);
+      fitLabel(text, PORT_CONTENT_WIDTH - 32);
     for (const text of labelLayer.querySelectorAll('[data-fit-width]'))
       fitLabel(text, Number(text.getAttribute('data-fit-width')));
     for (const text of labelLayer.querySelectorAll('.summary-rate')) fitValue(text, 101, 26);
@@ -1571,20 +1596,26 @@ export function createGraph(
   }
   function centerTarget() {
     resize();
-    const camera = outputCamera(layout, dimensions, view.scale);
-    if (!camera) return;
+    const camera = outputCamera({ ...layout, nodes: visibleNodes(), edges: layout.edges.filter(
+      (edge) => !isHidden(edge.source) && !isHidden(edge.target),
+    ) }, dimensions, view.scale);
+    if (!camera) return false;
     outputAnchorId = camera.anchorId;
     view.x = camera.x;
     view.y = camera.y;
     updateView();
+    return true;
   }
   function centerStart() {
     resize();
-    const starts = layout.nodes.filter((n) => n.rank === 0);
-    if (!starts.length) return;
+    const nodes = visibleNodes();
+    const firstRank = Math.min(...nodes.map((n) => n.rank));
+    const starts = nodes.filter((n) => n.rank === firstRank);
+    if (!starts.length) return false;
     view.x = 40 - Math.min(...starts.map((n) => n.x)) * view.scale;
     view.y = 40 - Math.min(...starts.map((n) => n.y)) * view.scale;
     updateView();
+    return true;
   }
   function resetView() {
     view.scale = 1;
@@ -1592,7 +1623,7 @@ export function createGraph(
   }
   function centerNode(id, { readable = false } = {}) {
     const node = layout.nodes.find((n) => n.id === id);
-    if (!node) return false;
+    if (!node || isHidden(id)) return false;
     if (readable && view.scale < 0.65) view.scale = 1;
     view.x = dimensions.width / 2 - (node.x + node.width / 2) * view.scale;
     view.y = dimensions.height / 2 - (node.y + node.height / 2) * view.scale;
@@ -1601,7 +1632,7 @@ export function createGraph(
   }
   function captureAnchor(id) {
     const node = layout.nodes.find((n) => n.id === id);
-    return node
+    return node && !isHidden(node.id)
       ? {
           id,
           x: view.x + (node.x + node.width / 2) * view.scale,
@@ -1611,7 +1642,7 @@ export function createGraph(
   }
   function restoreAnchor(anchor) {
     const node = anchor && layout.nodes.find((n) => n.id === anchor.id);
-    if (!node) return false;
+    if (!node || isHidden(node.id)) return false;
     view.x = anchor.x - (node.x + node.width / 2) * view.scale;
     view.y = anchor.y - (node.y + node.height / 2) * view.scale;
     updateView();
@@ -1678,6 +1709,64 @@ export function createGraph(
     for (const [id, el] of nodeElements) el.classList.toggle('fl-selected', id === selectedId);
     onSelect?.(payload(node));
   }
+  function boundaryGeometry(edge) {
+    const input = isHidden(edge.source),
+      x = input ? edge.targetX : edge.sourceX,
+      y = input ? edge.targetY : edge.sourceY,
+      endX = x + (input ? -110 : 110);
+    return {
+      input, x, y, endX,
+      box: { x: x + (input ? -150 : 22), y: y - edge.bundleWidth / 2 - 42, width: 128, height: 28 },
+    };
+  }
+  function makeBoundaryEdge(edge) {
+    const { input, x, y, endX, box } = boundaryGeometry(edge),
+      completed = nodesById.get(input ? edge.source : edge.target),
+      unfinished = nodesById.get(input ? edge.target : edge.source),
+      englishFirst = language === 'en' || language === 'en-ru',
+      pipe = edge.transport.kind === 'pipe';
+    const details = `${englishFirst ? 'Connected' : 'Подключено'}: ${completed?.nameEn || completed?.name}\n${completed?.nameRu || ''}\n${input ? '→' : '←'} ${num(edge.rate)} ${units(edge.itemId)} ${full.itemMap.get(edge.itemId)?.name || ''}\n${transportSummary(edge.transport)}`;
+    const group = svgEl('g', {
+      class: `flow-group completed-boundary fl-${edge.transport.kind}`,
+      'data-edge': edge.id,
+      'data-completed-node': completed.id,
+      'data-transport-count': edge.transport.count,
+      'aria-label': details,
+    });
+    for (const lane of edge.lanes) {
+      const laneY = input ? lane.points.at(-1).y : lane.points[0].y;
+      const path = `M ${input ? endX : x} ${laneY} L ${input ? x : endX} ${laneY}`;
+      const line = svgEl('g', { 'data-lane': lane.number, 'data-load': lane.load });
+      line.append(svgEl('path', { class: 'flow', d: path, stroke: edge.color, 'stroke-width': LANE_WIDTH }));
+      if (pipe) line.append(svgEl('path', { class: 'pipe-core', d: path }), svgEl('path', { class: 'pipe-gloss', d: path }));
+      else line.append(svgEl('path', { class: 'belt-bed', d: path }), svgEl('path', { class: 'belt-treads', d: path, stroke: edge.color }));
+      line.append(svgEl('path', { class: 'flow-direction', d: 'M -4 -2.4 L 0 0 L -4 2.4', transform: `translate(${(x + endX) / 2} ${laneY})` }));
+      group.append(line);
+    }
+    group.append(svgEl('circle', { cx: endX, cy: y, r: 12 }), svgEl('text', { x: endX, y: y + 6, 'text-anchor': 'middle' }, '✓'));
+    const hit = svgEl('path', { class: 'flow-hit', d: `M ${x} ${y} L ${endX} ${y}`, 'stroke-width': Math.max(28, edge.bundleWidth + 10) });
+    hit.append(svgEl('title', {}, details));
+    group.append(hit);
+    const caption = svgEl('g', { class: 'edge-label completed-boundary', transform: `translate(${box.x} ${box.y})`, 'data-completed-edge': edge.id });
+    caption.append(
+      svgEl('rect', { width: box.width, height: box.height, rx: 6, fill: '#173027', stroke: '#5d9c7d' }),
+      svgEl('text', { x: 10, y: 19, 'font-size': 13, style: 'font-size:13px', 'data-fit-width': 108 }, englishFirst ? '✓ Connected' : '✓ Подключено'),
+      svgEl('title', {}, details),
+    );
+    const activate = (event) => {
+      event.stopPropagation();
+      if (!lastClickMoved && unfinished) selectNode(unfinished);
+    };
+    for (const element of [group, caption]) {
+      element.addEventListener('pointerenter', () => highlightEdge(edge));
+      element.addEventListener('pointerleave', clearHighlight);
+      element.addEventListener('click', activate);
+    }
+    labelLayer.append(caption);
+    edgeElements.set(edge.id, group);
+    labelElements.set(edge.id, caption);
+    return group;
+  }
   function makeEdge(edge) {
     const plan = edge.transport,
       pipe = plan.kind === 'pipe';
@@ -1734,6 +1823,8 @@ export function createGraph(
       group.append(laneGroup);
     }
     for (const crossing of edge.crossings) {
+      const other = layout.edges.find((candidate) => candidate.id === crossing.under);
+      if (other && (isHidden(other.source) || isHidden(other.target))) continue;
       const bridge = svgEl('g', {
         class: 'flow-bridge',
         stroke: edge.color,
@@ -1784,19 +1875,19 @@ export function createGraph(
     const icon = safeIcon(item.icon);
     if (icon) {
       cacheIcon(icon);
-      content.append(svgEl('image', { href: icon, x: 10, y: compact ? 5 : 10, width: 28, height: 28 }));
+      content.append(svgEl('image', { href: icon, x: 10, y: 8, width: 24, height: 24 }));
     }
     content.append(
       svgEl(
         'text',
-        { class: 'label-title', x: 45, y: compact ? 20 : 25, 'data-fit-width': box.width - 57 },
+        { class: 'label-title', x: 45, y: 25, 'data-fit-width': box.width - 57 },
         trim(`${edge.loop ? (englishFirst ? '↶ Return / ' : '↶ Возврат / ') : ''}${primary}`, 36),
       ),
     );
     if (!compact && secondary && secondary !== primary)
       content.append(svgEl('text', { class: 'label-en', x: 45, y: 43, 'data-fit-width': box.width - 57 }, secondary));
     const type = pipe ? (englishFirst ? 'pipes' : 'труб') : englishFirst ? 'belts' : 'конв.';
-    const rateText = svgEl('text', { class: 'label-rate', x: 11, y: compact ? 53 : 77 });
+    const rateText = svgEl('text', { class: 'label-rate', x: 11, y: compact ? 66 : 77 });
     rateText.append(svgEl('tspan', { style: `fill:${edge.color}` }, num(edge.rate)));
     rateText.append(svgEl('tspan', { class: 'label-unit', dx: 8 }, units(edge.itemId)));
     content.append(rateText);
@@ -1841,7 +1932,7 @@ export function createGraph(
       item = full.itemMap.get(node.itemId),
       unresolved = record.unresolved;
     const group = svgEl('g', {
-      class: `node fl-${node.kind}${selectedId === node.id ? ' fl-selected' : ''}${unresolved ? ' fl-unresolved' : ''}`,
+      class: `node fl-${node.kind}${selectedId === node.id ? ' fl-selected' : ''}${unresolved ? ' fl-unresolved' : ''}${progress[node.id] ? ` fl-${progress[node.id]}` : ''}`,
       transform: `translate(${node.x} ${node.y})`,
       tabindex: 0,
       role: 'button',
@@ -1919,6 +2010,7 @@ export function createGraph(
         x: node.width - 16,
         y: 50,
         'text-anchor': 'end',
+        'data-fit-width': hasBuilding ? 164 : 224,
       }, num(machines ?? node.rate)));
       group.append(svgEl('text', {
         class: 'node-unit', x: node.width - 16, y: 70, 'text-anchor': 'end',
@@ -1998,7 +2090,7 @@ export function createGraph(
       group.append(
         svgEl(
           'text',
-          { class: 'node-rate', x: 16, y: rateY },
+          { class: 'node-rate', x: 16, y: rateY, 'data-fit-width': machines != null ? PORT_CONTENT_WIDTH : node.width - 32 },
           `${num(node.rate)} ${units(node.itemId)}`,
         ),
       );
@@ -2022,16 +2114,23 @@ export function createGraph(
         y2: dividerY,
       }),
     );
+    group.append(svgEl('line', {
+      class: 'port-divider',
+      x1: node.width / 2,
+      x2: node.width / 2,
+      y1: dividerY + 12,
+      y2: node.height - PROGRESS_FOOTER - 10,
+    }));
     const inEdges = layout.edges.filter((e) => e.target === node.id),
       outEdges = layout.edges.filter((e) => e.source === node.id);
     if (inEdges.length)
-      group.append(svgEl('text', { class: 'node-kind', x: 16, y: headingY }, 'ВХОД'));
+      group.append(svgEl('text', { class: 'node-kind', x: 16, y: headingY }, englishFirst ? 'INPUT' : 'ВХОД'));
     if (outEdges.length)
       group.append(
         svgEl(
           'text',
           { class: 'node-kind', x: node.width - 16, y: headingY, 'text-anchor': 'end' },
-          'ВЫХОД',
+          englishFirst ? 'OUTPUT' : 'ВЫХОД',
         ),
       );
     const port = (edge, input) => {
@@ -2054,22 +2153,61 @@ export function createGraph(
       const portIcon = safeIcon(material?.icon);
       if (portIcon) {
         cacheIcon(portIcon);
-        group.append(svgEl('image', { href: portIcon, x: input ? 16 : node.width - 40, y: y - 65, width: 24, height: 24 }));
+        group.append(svgEl('image', { class: 'port-icon', href: portIcon, x: input ? 16 : node.width - 40, y: y - 76, width: 24, height: 24 }));
       }
       group.append(
         svgEl(
           'text',
-          { class: 'port-rate', x, y: y - 9, 'text-anchor': anchor, style: `fill:${edge.color}` },
+          { class: 'port-rate', x, y: y - 5, 'text-anchor': anchor, style: `fill:${edge.color}`, 'data-port-half': input ? 'input' : 'output', 'data-fit-width': PORT_CONTENT_WIDTH },
           num(edge.rate),
         ),
       );
       group.append(
-        svgEl('text', { class: 'port-name', x: input ? 46 : node.width - 46, y: y - 46, 'text-anchor': anchor }, name),
+        svgEl('text', { class: 'port-name', x: input ? 46 : node.width - 46, y: y - 59, 'text-anchor': anchor }, name),
         svgEl('text', { class: 'port-unit', x, y: y + 18, 'text-anchor': anchor }, units(edge.itemId)),
       );
     };
     for (const edge of inEdges) port(edge, true);
     for (const edge of outEdges) port(edge, false);
+    group.append(svgEl('line', {
+      class: 'node-divider', x1: 16, x2: node.width - 16,
+      y1: node.height - 38, y2: node.height - 38,
+    }));
+    const status = progress[node.id] || 'unstarted';
+    const statusText = englishFirst
+      ? { unstarted: 'Not started', built: 'Built', connected: 'Connected' }[status]
+      : { unstarted: 'Не начато', built: 'Построено', connected: 'Подключено' }[status];
+    const nextStatus = status === 'connected' ? 'built' : 'connected';
+    const mark = svgEl('g', {
+      class: 'node-progress', tabindex: 0, role: 'button',
+      'aria-pressed': String(status === 'connected'),
+      'aria-label': `${node.nameEn || node.name}: ${statusText}. ${nextStatus === 'connected' ? 'Отметить подключённым' : 'Снять отметку подключения'}`,
+      'data-progress-node': node.id,
+    });
+    mark.append(
+      svgEl('rect', { x: 16, y: node.height - 31, width: node.width - 32, height: 24, rx: 5 }),
+      svgEl('text', { x: 25, y: node.height - 14 }, `${status === 'connected' ? '✓' : '○'} ${englishFirst ? 'Done' : 'Готово'}`),
+      svgEl('text', { x: node.width - 25, y: node.height - 14, 'text-anchor': 'end' }, statusText),
+      svgEl('title', {}, nextStatus === 'connected'
+        ? 'Отметить участок подключённым и готовым'
+        : 'Снять подключение, сохранить отметку «Построено»'),
+    );
+    const changeProgress = (event) => {
+      event.stopPropagation();
+      if (lastClickMoved) return;
+      if (onProgressChange) onProgressChange(node.id, nextStatus);
+      else {
+        progress = { ...progress, [node.id]: nextStatus };
+        render();
+      }
+    };
+    mark.addEventListener('click', changeProgress);
+    mark.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      changeProgress(event);
+    });
+    group.append(mark);
     group.append(
       svgEl(
         'title',
@@ -2095,7 +2233,8 @@ export function createGraph(
   let miniTransform = null;
   function updateMini() {
     mini.replaceChildren();
-    if (layout.nodes.length < 5 || dimensions.width < 650) {
+    const shownNodes = visibleNodes();
+    if (shownNodes.length < 5 || dimensions.width < 650) {
       miniTransform = null;
       return;
     }
@@ -2109,7 +2248,7 @@ export function createGraph(
     const s = Math.min((w - p * 2) / layout.bounds.width, (h - p * 2) / layout.bounds.height),
       ox = (w - layout.bounds.width * s) / 2 - layout.bounds.x * s,
       oy = (h - layout.bounds.height * s) / 2 - layout.bounds.y * s;
-    for (const n of layout.nodes)
+    for (const n of shownNodes)
       mini.append(
         svgEl('rect', {
           x: ox + n.x * s,
@@ -2137,6 +2276,39 @@ export function createGraph(
     );
     miniTransform = { x, y, ox, oy, s };
   }
+  function updateVisibleBounds() {
+    if (!layout.nodes.some((node) => isHidden(node.id))) return;
+    const nodes = visibleNodes();
+    if (!nodes.length) {
+      layout.bounds = { x: 0, y: 0, width: 600, height: 400 };
+      return;
+    }
+    let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
+    const point = (x, y) => {
+      left = Math.min(left, x);
+      top = Math.min(top, y);
+      right = Math.max(right, x);
+      bottom = Math.max(bottom, y);
+    };
+    const box = (rect) => {
+      point(rect.x, rect.y);
+      point(rect.x + rect.width, rect.y + rect.height);
+    };
+    for (const node of nodes) box(node);
+    for (const edge of visibleEdges()) {
+      if (isHidden(edge.source) || isHidden(edge.target)) {
+        const boundary = boundaryGeometry(edge);
+        box(boundary.box);
+        point(Math.min(boundary.x, boundary.endX) - 14, boundary.y - edge.bundleWidth / 2 - 14);
+        point(Math.max(boundary.x, boundary.endX) + 14, boundary.y + edge.bundleWidth / 2 + 14);
+      } else {
+        box(edge.labelBox);
+        for (const lane of edge.lanes)
+          for (const coordinate of lane.points) point(coordinate.x, coordinate.y);
+      }
+    }
+    layout.bounds = { x: left - 44, y: top - 44, width: right - left + 114, height: bottom - top + 88 };
+  }
   function render() {
     clearHighlight();
     projected = full;
@@ -2148,8 +2320,10 @@ export function createGraph(
       (e) => !visible || (visible.has(e.source) && visible.has(e.target)),
     );
     layout = layoutFlow(nodes, edges, { gap: spacing, transport: transportSettings, compact });
+    updateVisibleBounds();
     svg.classList.toggle('fl-compact', compact);
     svg.setAttribute('data-detail', compact ? 'compact' : 'full');
+    svg.setAttribute('data-progress-filter', progressFilter);
     nodesById.clear();
     nodeElements.clear();
     edgeElements.clear();
@@ -2157,19 +2331,22 @@ export function createGraph(
     edgeLayer.replaceChildren();
     labelLayer.replaceChildren();
     nodeLayer.replaceChildren();
-    if (!layout.nodes.length) {
+    if (!visibleNodes().length) {
+      const englishFirst = language === 'en' || language === 'en-ru';
       nodeLayer.append(
         svgEl(
           'text',
           { class: 'fl-empty', x: 300, y: 200 },
-          'Добавьте цель и рассчитайте производство',
+          layout.nodes.length
+            ? (englishFirst ? 'All nodes are connected' : 'Все узлы подключены')
+            : (englishFirst ? 'Add a target and calculate production' : 'Добавьте цель и рассчитайте производство'),
         ),
       );
     }
     for (const node of layout.nodes) nodesById.set(node.id, node);
-    for (const edge of [...layout.edges].sort((a, b) => Number(b.loop) - Number(a.loop)))
-      edgeLayer.append(makeEdge(edge));
-    for (const node of layout.nodes) nodeLayer.append(makeNode(node));
+    for (const edge of visibleEdges().sort((a, b) => Number(b.loop) - Number(a.loop)))
+      edgeLayer.append(isHidden(edge.source) || isHidden(edge.target) ? makeBoundaryEdge(edge) : makeEdge(edge));
+    for (const node of visibleNodes()) nodeLayer.append(makeNode(node));
     fitVisibleLabels();
     updateView();
     drawnOnce = true;
@@ -2299,7 +2476,7 @@ export function createGraph(
     try {
       fitVisibleLabels();
       for (const text of nodeLayer.querySelectorAll('.port-rate'))
-        fitValue(text, (WIDTH - 40) / 2, compact ? 30 : 26);
+        fitValue(text, PORT_CONTENT_WIDTH, compact ? 30 : 26);
       for (const text of nodeLayer.querySelectorAll('.node-machines'))
         fitValue(text, compact ? 164 : 140, compact ? 40 : 30);
       clone = svg.cloneNode(true);
@@ -2326,7 +2503,7 @@ export function createGraph(
     );
   }
   return {
-    setData(data, result) {
+    setData(data, result, viewOptions = {}) {
       const hadContent = full.nodes.length > 0;
       const previousTargets = full.nodes
         .filter((n) => n.kind === 'target')
@@ -2338,6 +2515,9 @@ export function createGraph(
         captureAnchor(focus?.id) ||
         captureAnchor(outputAnchorId) ||
         captureAnchor(layout.nodes.find((n) => n.kind === 'target')?.id);
+      if (Object.hasOwn(viewOptions, 'progress')) progress = copyProgress(viewOptions.progress);
+      if (Object.hasOwn(viewOptions, 'progressFilter'))
+        progressFilter = viewOptions.progressFilter === 'all' ? 'all' : 'unfinished';
       full = buildFlowData(data, result);
       const nextTargets = full.nodes
         .filter((n) => n.kind === 'target')
@@ -2370,6 +2550,19 @@ export function createGraph(
     centerStart,
     centerTarget,
     centerNode,
+    setProgress(value = {}) {
+      const next = copyProgress(value);
+      if (Object.keys(next).length === Object.keys(progress).length &&
+        Object.entries(next).every(([id, status]) => progress[id] === status)) return;
+      progress = next;
+      render();
+    },
+    setProgressFilter(value = 'unfinished') {
+      const next = value === 'all' ? 'all' : 'unfinished';
+      if (next === progressFilter) return;
+      progressFilter = next;
+      render();
+    },
     setSpacing(value = 'wide') {
       const chosen = value === 'extra' ? 540 : value === 'wide' ? 360 : Number(value);
       const next = Number.isFinite(chosen) ? Math.max(340, Math.min(1200, chosen)) : 360;
@@ -2424,6 +2617,7 @@ export function createGraph(
       zoom(1 / 1.3);
     },
     setFocus(nodeId, mode = 'neighbors') {
+      if (isHidden(nodeId)) return false;
       if (!projected.nodes.some((n) => n.id === nodeId)) {
         const original = full.nodes.find((n) => n.id === nodeId);
         if (!original) return false;
@@ -2454,8 +2648,8 @@ export function createGraph(
       render();
       if (!restoreAnchor(anchor)) centerTarget();
     },
-    setLanguage(mode = 'both') {
-      const next = ['both', 'ru', 'en', 'en-ru'].includes(mode) ? mode : 'both';
+    setLanguage(mode = 'en-ru') {
+      const next = ['en-ru', 'both', 'en', 'ru'].includes(mode) ? mode : 'en-ru';
       if (next === language) return;
       language = next;
       render();
@@ -2474,8 +2668,11 @@ export function createGraph(
       return {
         nodes: full.nodes.length,
         edges: full.edges.length,
-        visibleNodes: layout.nodes.length,
-        visibleEdges: layout.edges.length,
+        visibleNodes: visibleNodes().length,
+        visibleEdges: visibleEdges().length,
+        completedNodes: full.nodes.filter((node) => progress[node.id] === 'connected').length,
+        hiddenNodes: full.nodes.filter((node) => isHidden(node.id)).length,
+        progressFilter,
         cycles: layout.edges.filter((e) => e.loop).length,
         crossings: layout.crossings?.length || 0,
         belts: layout.edges
