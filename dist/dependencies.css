@@ -1,0 +1,415 @@
+.dependency-view {
+  background: var(--bg, #10151a);
+  color: var(--text, #edf1f4);
+  font-size: 14px;
+}
+.dependency-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 22px;
+  padding: 20px 22px 14px;
+  border-bottom: 1px solid var(--line, #2c3742);
+  background: #18212a;
+}
+.dependency-intro {
+  max-width: 730px;
+}
+.dependency-intro h2 {
+  font-size: 16px;
+  margin: 0 0 8px;
+}
+.dependency-intro p {
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--muted, #95a5b4);
+  margin: 0;
+}
+.dependency-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+  padding-top: 2px;
+}
+.dependency-button {
+  padding: 8px 10px;
+  min-height: 34px;
+  background: #25323e;
+  border: 1px solid #42525f;
+  border-radius: 6px;
+  color: #dbe5ed;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.dependency-button:hover {
+  background: #344554;
+  border-color: #6d8292;
+}
+.dependency-summary {
+  padding: 11px 22px;
+  border-bottom: 1px solid #293640;
+  color: #9bafbf;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.dependency-scroll {
+  overflow: auto;
+  min-height: 360px;
+  max-height: max(420px, calc(100vh - 350px));
+  padding: 22px;
+  background: #111920;
+  scrollbar-color: #405160 #151e26;
+  overscroll-behavior: contain;
+}
+.dependency-forest,
+.dependency-children {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.dependency-forest {
+  width: max-content;
+  min-width: 100%;
+}
+.dependency-forest > .dependency-entry + .dependency-entry {
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px solid #34434f;
+}
+.dependency-children {
+  margin-left: 17px;
+  padding-left: 28px;
+  border-left: 1px solid #486071;
+}
+.dependency-children[hidden],
+.dependency-empty[hidden] {
+  display: none;
+}
+.dependency-entry {
+  position: relative;
+  margin: 0 0 13px;
+  padding: 0;
+}
+.dependency-children > .dependency-entry:before {
+  content: '';
+  position: absolute;
+  top: 23px;
+  left: -28px;
+  width: 22px;
+  height: 1px;
+  background: #486071;
+}
+.dependency-connection {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 45px;
+  width: 560px;
+  padding: 6px 6px 6px 1px;
+  color: #c5d3de;
+  font-size: 12px;
+}
+.dependency-connection-label {
+  color: #8fa3b3;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+.dependency-connection .connection-name {
+  flex: 1;
+  min-width: 70px;
+}
+.dependency-connection .dependency-names strong {
+  font-size: 12px;
+  font-weight: 500;
+}
+.dependency-connection .dependency-names small {
+  font-size: 11px;
+}
+.dependency-connection-rate {
+  font-size: 13px;
+  color: #eef4f9;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.dependency-transport {
+  font-size: 10px;
+  line-height: 1.4;
+  white-space: nowrap;
+  padding: 3px 6px;
+  border: 1px solid #546777;
+  border-radius: 4px;
+  background: #24323d;
+  color: #c5d7e4;
+  flex-shrink: 0;
+}
+.dependency-transport.pipe {
+  border-color: #386973;
+  background: #1c333c;
+  color: #8ac5d1;
+}
+.dependency-card {
+  width: 560px;
+  border: 1px solid #3c4b57;
+  border-radius: 8px;
+  background: #1a2530;
+  box-shadow: 0 2px 4px #0002;
+  padding: 12px 14px 12px 8px;
+}
+.dependency-card.is-target {
+  border-color: #9b763e;
+  background: #2b2a22;
+  box-shadow: inset 3px 0 #e5ac58;
+}
+.dependency-card.is-shared {
+  border-style: dashed;
+  background: #17242d;
+  border-color: #47718b;
+}
+.dependency-card.is-return {
+  border-color: #99794b;
+  background: #2b2822;
+}
+.dependency-card.is-highlighted {
+  outline: 2px solid #f1ad5a;
+  outline-offset: 3px;
+  box-shadow: 0 0 20px #f1ad5a22;
+}
+.dependency-card-top {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 40px;
+}
+.dependency-toggle,
+.dependency-toggle-placeholder {
+  width: 24px;
+  min-width: 24px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.dependency-toggle {
+  font-size: 27px;
+  color: #b4c8d8;
+  background: transparent;
+  padding: 0;
+  border-radius: 4px;
+  transition: transform 0.12s;
+}
+.dependency-toggle[aria-expanded='true'] {
+  transform: rotate(90deg);
+}
+.dependency-toggle:hover {
+  background: #384a58;
+  color: white;
+}
+.dependency-icon {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #111b23;
+  border-radius: 5px;
+  color: #9ab0c1;
+  overflow: hidden;
+}
+.dependency-icon img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 2px;
+}
+.dependency-icon.compact {
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  background: transparent;
+}
+.dependency-icon.tiny {
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  background: transparent;
+}
+.dependency-icon.building {
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+}
+.dependency-names {
+  display: block;
+  min-width: 0;
+  line-height: 1.35;
+}
+.dependency-names strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 550;
+  overflow-wrap: anywhere;
+}
+.dependency-names small {
+  display: block;
+  font-size: 11px;
+  color: #99adbd;
+  margin-top: 3px;
+  overflow-wrap: anywhere;
+}
+.dependency-title {
+  flex: 1;
+}
+.dependency-title strong {
+  font-size: 14px;
+}
+.dependency-title small {
+  font-size: 12px;
+}
+.dependency-link {
+  background: transparent;
+  border: 0;
+  padding: 5px 0;
+  color: #e9ae65;
+  font-size: 11px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.dependency-link:hover {
+  text-decoration: underline;
+  color: #ffca83;
+}
+.dependency-badges {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+  padding: 8px 0 0 33px;
+}
+.dependency-badge {
+  display: inline-block;
+  font-size: 10px;
+  line-height: 1.5;
+  color: #a9bac8;
+  background: #263745;
+  border-radius: 4px;
+  padding: 2px 6px;
+  white-space: nowrap;
+}
+.dependency-badge.target {
+  background: #493c27;
+  color: #f2c178;
+}
+.dependency-badge.shared {
+  background: #263f51;
+  color: #acd2ed;
+}
+.dependency-badge.return {
+  background: #4b3d28;
+  color: #f4c078;
+}
+.dependency-reference-note {
+  font-size: 11px;
+  color: #a3b2bd;
+  line-height: 1.45;
+}
+.dependency-reference-actions {
+  margin: 4px 0 0 33px;
+}
+.dependency-reference-actions .dependency-link {
+  font-size: 12px;
+}
+.dependency-details {
+  margin: 10px 0 0 33px;
+}
+.dependency-recipe {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding-top: 8px;
+  border-top: 1px solid #3a4854;
+}
+.dependency-recipe .dependency-names strong {
+  font-size: 12px;
+  font-weight: 400;
+}
+.dependency-field {
+  color: #8fa5b7;
+  font-size: 11px;
+  flex-shrink: 0;
+  line-height: 1.5;
+}
+.dependency-machine {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 9px;
+}
+.dependency-machine .dependency-names {
+  flex: 1;
+}
+.dependency-machine .dependency-names strong {
+  font-size: 12px;
+  font-weight: 400;
+}
+.dependency-machine-count {
+  font-size: 15px;
+  white-space: nowrap;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #e7c28d;
+}
+.dependency-outputs {
+  display: flex;
+  align-items: center;
+  gap: 7px 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #354551;
+}
+.dependency-output {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: #aebfcd;
+  line-height: 1.45;
+}
+.dependency-output strong {
+  font-size: 12px;
+  color: #dae5ee;
+  font-weight: 550;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.dependency-empty {
+  color: #9ab0c1;
+  font-size: 14px;
+  padding: 45px 15px;
+  text-align: center;
+  line-height: 1.6;
+}
+@media (max-width: 1100px) {
+  .dependency-header {
+    flex-direction: column;
+    gap: 12px;
+  }
+  .dependency-actions {
+    padding-top: 0;
+  }
+  .dependency-scroll {
+    padding: 16px;
+  }
+  .dependency-card,
+  .dependency-connection {
+    width: 520px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dependency-toggle {
+    transition: none;
+  }
+}

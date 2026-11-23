@@ -1,0 +1,179 @@
+{
+  "schemaVersion": 1,
+  "checkedAt": "2026-11-23T12:59:00Z",
+  "matched": true,
+  "recipeCount": 291,
+  "altCount": 106,
+  "manufacturingBuildingTypes": 11,
+  "seasonalRecipeCount": 15,
+  "verifiedDatasetVersion": "1.2.5.0",
+  "latestRelease": {
+    "version": "1.2.5.1",
+    "gameBuild": 520140,
+    "publishedAt": "2026-11-18",
+    "notesUrl": "https://store.steampowered.com/news/app/526870/view/679641571029680377",
+    "recipeChangesAnnounced": false,
+    "publishedChanges": "Network and replication improvements for multiplayer, especially large saves",
+    "exactPatchDocsCompared": false
+  },
+  "versionBoundary": "All available current production datasets agree. The SatisfactoryTools version index groups 1.2.3.1, 1.2.4.1 and 1.2.5.0. SCIM does not declare an exact patch. Original Docs was verified as 1.2.3.1. No separately obtained original 1.2.5.1 Docs was compared; latest release notes announce no recipe changes",
+  "checkedFields": [
+    "recipe IDs and coverage",
+    "production building",
+    "all ingredient rates",
+    "all product rates",
+    "craft duration",
+    "minimum power",
+    "maximum power",
+    "average power"
+  ],
+  "method": {
+    "comparison": "Independent normalization, separate from the project refresh script; producers enumerated from each source",
+    "rates": "Per minute at 100% clock; source litres converted to cubic metres for SCIM and original Docs. SatisfactoryTools already supplies fluid amounts in cubic metres",
+    "power": "Original native building class determines fixed versus variable power. SatisfactoryTools uses variablePowerDraw only when building powerUsage is zero",
+    "absoluteTolerance": 1e-08,
+    "relativeTolerance": 1e-10
+  },
+  "comparisons": [
+    {
+      "sourceId": "scim-stable",
+      "comparedRecipes": 291,
+      "missingRecipes": 0,
+      "unexpectedRecipes": 0,
+      "valueDifferences": 0,
+      "rawSourceMatchesRecordedAppHash": true
+    },
+    {
+      "sourceId": "game-docs",
+      "comparedRecipes": 291,
+      "missingRecipes": 0,
+      "unexpectedRecipes": 0,
+      "valueDifferences": 0
+    },
+    {
+      "sourceId": "sft-stable",
+      "comparedRecipes": 276,
+      "missingRecipes": 0,
+      "expectedSeasonalRecipesOutsideThisVariant": 15,
+      "unexpectedRecipes": 0,
+      "valueDifferences": 0,
+      "alternateFlagDifferences": 0
+    },
+    {
+      "sourceId": "sft-ficsmas",
+      "comparedRecipes": 291,
+      "missingRecipes": 0,
+      "unexpectedRecipes": 0,
+      "valueDifferences": 0,
+      "alternateFlagDifferences": 0
+    }
+  ],
+  "uranium": {
+    "recipeId": "Recipe_Uranium_Bauxite_C",
+    "name": "Uranium Ore (Bauxite)",
+    "buildingId": "Build_Converter_C",
+    "alternate": false,
+    "unlock": "Tier 9 Matter Conversion milestone; background schematic Schematic_9-1-1_C, unlocked by Schematic_9-1_C",
+    "secondsPerCraft": 6,
+    "inputsPerMinute": {
+      "Desc_SAMIngot_C": 10,
+      "Desc_OreBauxite_C": 480
+    },
+    "outputsPerMinute": {
+      "Desc_OreUranium_C": 120
+    },
+    "powerMW": {
+      "min": 100,
+      "max": 400,
+      "average": 250
+    },
+    "directMiningAvailable": true,
+    "minerNormalRatePerMinute": {
+      "Mk1": 60,
+      "Mk2": 120,
+      "Mk3": 240
+    },
+    "conversionEnabledByDefault": false,
+    "defaultPolicyReason": "This is a real late-game milestone recipe, independent of hard-drive alternates. Scarcity weighting can prefer it over direct uranium extraction. Conversion therefore requires an explicit setting; importing hard-drive unlocks alone does not establish Tier 9 progression"
+  },
+  "scopeNotes": [
+    "All 291 real manufacturing recipes are included; construction, hand-only crafting and generator fuel burning are outside the manufacturing scope",
+    "Normal SatisfactoryTools Stable has 276 manufacturing recipes; its FICSMAS variant adds the same 15 seasonal manufacturing recipes present in Factory Lens",
+    "SatisfactoryTools additionally synthesizes Fake_Recipe_Gift_C for the FICSMAS Gift Tree (15 gifts/min, 0 MW). Factory Lens models gifts as an external supply with a default limit of zero and does not count Gift Trees",
+    "Unused variable-power fields on Singularity Cell, Biochemical Sculptor and Ballistic Warp Drive do not override their fixed-power buildings; correct values are 55, 75 and 55 MW"
+  ],
+  "sources": [
+    {
+      "id": "scim-stable",
+      "label": "SCIM Stable English game data",
+      "url": "https://static.satisfactory-calculator.com/data/json/gameData/en-Stable.json",
+      "fetchedAt": "2026-11-23T12:50:31.446456+00:00",
+      "sha256": "8c09e085cb8fe7fc08fbec34f92a67b35c78054159615eae6b0cca5c8451de52",
+      "bytes": 1548816,
+      "declaredVersion": "Stable; no exact patch declared"
+    },
+    {
+      "id": "sft-version-index",
+      "label": "SatisfactoryTools version index",
+      "url": "https://api.new.satisfactorytools.com/v1/versions",
+      "fetchedAt": "2026-11-23T12:50:36.684207+00:00",
+      "sha256": "0914ad5ad479dbbe0da2da971305b96ab833367d956d1c8c6cfc646239a58161",
+      "bytes": 3370
+    },
+    {
+      "id": "sft-stable",
+      "label": "SatisfactoryTools 1.2.5.0 Stable",
+      "url": "https://api.new.satisfactorytools.com/data/versions/stable-26281294.json",
+      "fetchedAt": "2026-11-23T12:51:25.766236+00:00",
+      "sha256": "24899923b1beec190edc3e1d3897b228b6be7fbe72beabd4bf15a101c8d23e83",
+      "bytes": 2904914,
+      "declaredVersion": "1.2.5.0",
+      "buildId": "26281294",
+      "buildIdKind": "dataset/Steam build; not the game changelist"
+    },
+    {
+      "id": "sft-ficsmas",
+      "label": "SatisfactoryTools 1.2.5.0 FICSMAS",
+      "url": "https://api.new.satisfactorytools.com/data/versions/stable-26281294-ficsmas.json",
+      "fetchedAt": "2026-11-23T12:51:34.782242+00:00",
+      "sha256": "728c0af750a3561d1fc2ede384583019c025a4feeab5526ac3578e93cf940934",
+      "bytes": 3005111,
+      "declaredVersion": "1.2.5.0",
+      "buildId": "26281294",
+      "buildIdKind": "dataset/Steam build; not the game changelist"
+    },
+    {
+      "id": "game-docs",
+      "label": "Original English game Docs (public mirror)",
+      "url": "https://github.com/0xjc/SatisfactoryLP/blob/2a4e3e134308a7d1cb0f3ff6b6968a0acf82281d/Docs.json",
+      "declaredVersion": "1.2.3.1",
+      "gameBuild": 495413,
+      "sha256": "2351035c70bfe83374eefe048ec292364ff3e9867698e2477a01c3a297584a73",
+      "bytes": 10643994,
+      "gitBlobSha": "384542140533f0d3baf433a3e7d8e74ca9c4972d",
+      "mirrorCheckedAt": "2026-11-23T12:56:05.816Z",
+      "mirrorCheckUrl": "https://api.github.com/repos/0xjc/SatisfactoryLP/commits?path=Docs.json&per_page=3",
+      "latestDocsCommit": "9a38fc1b383586d2c1dcf46a070e8f1bd3e60f4b"
+    },
+    {
+      "id": "sft-power-semantics",
+      "label": "SatisfactoryTools primary power calculation source",
+      "url": "https://raw.githubusercontent.com/SatisfactoryTools/SFTools/0e0a191984f7d1313549b844e423f47497440b8f/src/app/Model/Planner/Formulas.ts",
+      "fetchedAt": "2026-11-23T12:58:10.487812+00:00",
+      "sha256": "1f64fff0057aa567cb4f32eb51f6923b9b69da276ac8bf6acb16d53c49fdb36e",
+      "bytes": 3786,
+      "commit": "0e0a191984f7d1313549b844e423f47497440b8f",
+      "browseUrl": "https://github.com/SatisfactoryTools/SFTools/blob/0e0a191984f7d1313549b844e423f47497440b8f/src/app/Model/Planner/Formulas.ts"
+    },
+    {
+      "id": "release-notes",
+      "label": "Official Coffee Stain release notes on Steam",
+      "url": "https://store.steampowered.com/news/app/526870/view/679641571029680377",
+      "fetchedAt": "2026-11-23T12:58:09.516097+00:00",
+      "sha256": "0528cd14b1bb8c2cb7d18baac2798197a4839fa6be2b30c8b7ee2bcf15e3e10e",
+      "bytes": 37450,
+      "declaredVersion": "1.2.5.1",
+      "snapshotFormat": "HTML; hash identifies the fetched page, including its presentation"
+    }
+  ]
+}

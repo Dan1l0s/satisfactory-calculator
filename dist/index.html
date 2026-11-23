@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#10151a" />
+    <meta
+      name="description"
+      content="Планировщик производства Satisfactory с русскими и английскими названиями, выбором рецептов и оптимизацией ресурсов, энергии и зданий"
+    />
+    <title>Factory Lens / Satisfactory Planner</title>
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./dependencies.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <a class="brand" href="#" aria-label="Factory Lens"
+        ><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span
+        ><span
+          >FACTORY<span class="brand-light">LENS</span><small>SATISFACTORY PLANNER</small></span
+        ></a
+      >
+      <div class="header-divider"></div>
+      <span class="project-title"
+        >Мой завод <span>/</span> <strong id="project-name">План производства</strong></span
+      >
+      <div class="header-actions">
+        <span class="version-badge" id="version-badge" title="Версия базы рецептов"
+          >Satisfactory 1.2</span
+        >
+        <label class="sr-only" for="language">Язык названий</label
+        ><select id="language" class="language-select" aria-label="Язык названий">
+          <option value="both">RU + EN</option>
+          <option value="en-ru">EN + RU</option>
+          <option value="ru">Русский</option>
+          <option value="en">English</option>
+        </select>
+        <button class="button ghost icon-mobile" id="export-project" title="Скачать план в JSON">
+          <span data-icon="download"></span><span class="button-label">Экспорт</span>
+        </button>
+        <button class="button primary icon-mobile" id="share-project">
+          <span data-icon="link"></span><span class="button-label">Поделиться</span>
+        </button>
+        <button
+          class="icon-button"
+          id="open-about"
+          aria-label="О данных и расчёте"
+          title="О данных и расчёте"
+        >
+          <span data-icon="info"></span>
+        </button>
+      </div>
+    </header>
+    <div class="app-layout">
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-heading">
+          <span class="eyebrow">НАСТРОЙКА ПРОИЗВОДСТВА</span
+          ><button class="icon-button" id="new-project" title="Новый план" aria-label="Новый план">
+            <span data-icon="new"></span>
+          </button>
+        </div>
+        <section class="sidebar-section targets-section">
+          <div class="section-heading">
+            <h2>Что производим</h2>
+            <span class="tiny-label">в минуту</span>
+          </div>
+          <div id="targets"></div>
+          <button class="button add-button" id="add-target">
+            <span data-icon="plus"></span>Добавить продукт
+          </button>
+          <label class="field-label" for="preset">Быстрый старт</label>
+          <select id="preset" class="full-select">
+            <option value="">Выбрать пример…</option>
+            <option value="nuclear">Урановые стержни / 4/мин</option>
+            <option value="frames">Тяжёлые каркасы / 10/мин</option>
+            <option value="oil">Пластик + резина / 120/мин</option>
+            <option value="tier9">Баллистический варп-двигатель / 1/мин</option>
+          </select>
+        </section>
+        <section class="sidebar-section">
+          <div class="section-heading">
+            <h2>Цель оптимизации</h2>
+            <span
+              class="hint-icon"
+              title="Решатель сравнивает целые производственные цепочки с одинаковыми ограничениями"
+              >?</span
+            >
+          </div>
+          <div class="objective-list" role="radiogroup" aria-label="Цель оптимизации">
+            <button
+              class="objective-option selected"
+              data-objective="resources"
+              role="radio"
+              aria-checked="true"
+            >
+              <span class="objective-icon" data-icon="resource"></span
+              ><span><strong>Минимум ресурсов</strong><small>Экономить первичное сырьё</small></span
+              ><i></i>
+            </button>
+            <button
+              class="objective-option"
+              data-objective="energy"
+              role="radio"
+              aria-checked="false"
+            >
+              <span class="objective-icon" data-icon="bolt"></span
+              ><span><strong>Минимум энергии</strong><small>Снизить потребление в МВт</small></span
+              ><i></i>
+            </button>
+            <button
+              class="objective-option"
+              data-objective="buildings"
+              role="radio"
+              aria-checked="false"
+            >
+              <span class="objective-icon" data-icon="factory"></span
+              ><span><strong>Минимум зданий</strong><small>Сократить число машин</small></span
+              ><i></i>
+            </button>
+          </div>
+          <p class="helper" id="objective-hint">Добыча с учётом редкости сырья и заданных весов.</p>
+        </section>
+        <section class="sidebar-section">
+          <div class="section-heading">
+            <h2>Рецепты</h2>
+            <button class="text-button" id="manage-recipes">Настроить</button>
+          </div>
+          <div class="segmented" aria-label="Набор рецептов">
+            <button data-alternates="false" aria-pressed="false">Базовые</button
+            ><button data-alternates="true" aria-pressed="false">С альтернативами</button>
+          </div>
+          <p class="helper" id="recipe-hint">Выберите набор перед построением схемы</p>
+          <label class="conversion-control"
+            ><input
+              type="checkbox"
+              id="resource-conversions"
+              data-conversion-policy
+              disabled
+            /><span>Все преобразования сырья <small>Resource conversion / SAM</small></span></label
+          >
+          <p class="helper" id="conversion-hint">Выключены. Руду добываем из залежей</p>
+        </section>
+        <section class="sidebar-section">
+          <div class="section-heading">
+            <h2>Логистика</h2>
+            <button class="text-button" id="manage-transport">Настроить</button>
+          </div>
+          <p class="helper" id="transport-hint">Конвейеры Mk.5 / трубы Mk.2</p>
+        </section>
+        <section class="sidebar-section">
+          <div class="section-heading">
+            <h2>Добыча</h2>
+            <button class="text-button" id="manage-resources">Лимиты и чистота</button>
+          </div>
+          <div class="two-fields">
+            <label class="field-label"
+              >Шахтёр / Miner<select id="miner-tier" class="full-select">
+                <option value="1">Mk.1</option>
+                <option value="2">Mk.2</option>
+                <option value="3" selected>Mk.3</option>
+              </select></label
+            ><label class="field-label"
+              >Чистота по умолчанию<select id="default-purity" class="full-select">
+                <option value="0.5">Низкая</option>
+                <option value="1" selected>Нормальная</option>
+                <option value="2">Высокая</option>
+              </select></label
+            >
+          </div>
+          <button class="button subtle wide" id="manage-imports">
+            <span data-icon="import"></span>Готовые входящие ресурсы
+            <span id="imports-count" class="count-badge">0</span>
+          </button>
+          <p class="helper">Дробное число зданий при 100%. Чистота влияет на добычу и энергию</p>
+        </section>
+        <div class="sidebar-bottom">
+          <div class="local-state">
+            <span data-icon="save"></span><span id="save-status">План сохраняется в браузере</span>
+          </div>
+          <button id="import-project" class="text-button">Открыть JSON</button
+          ><input type="file" id="project-file" accept=".json,application/json" hidden />
+        </div>
+      </aside>
+      <main class="workspace">
+        <div class="workspace-heading">
+          <h1>План производства</h1>
+          <div class="solve-status" id="solve-status" role="status">
+            <span class="spinner"></span>Загружаем рецепты
+          </div>
+        </div>
+        <section class="metrics" id="metrics" aria-label="Показатели производства">
+          <button class="metric" data-tab-link="balance">
+            <span class="metric-label"><span data-icon="resource"></span>Ресурсный индекс</span
+            ><strong id="metric-resources">-</strong><small>взвешенная добыча / мин</small>
+          </button>
+          <div class="metric">
+            <span class="metric-label"><span data-icon="bolt"></span>Энергия</span
+            ><strong id="metric-energy">- <em>МВт</em></strong
+            ><small id="energy-note">производство + добыча</small>
+          </div>
+          <button class="metric" data-tab-link="build">
+            <span class="metric-label"><span data-icon="factory"></span>Здания</span
+            ><strong id="metric-buildings">-</strong><small>эквивалент при 100%</small>
+          </button>
+          <button class="metric" data-tab-link="build">
+            <span class="metric-label"><span data-icon="recipe"></span>Активные рецепты</span
+            ><strong id="metric-recipes">-</strong
+            ><small id="metric-alternates">включая альтернативные</small>
+          </button>
+        </section>
+        <section class="planner-panel">
+          <div class="view-tabs" role="tablist" aria-label="Вид производства">
+            <button class="view-tab active" role="tab" aria-selected="true" data-tab="graph">
+              <span data-icon="graph"></span>Потоки
+            </button>
+            <button class="view-tab" role="tab" aria-selected="false" data-tab="dependencies">
+              <span data-icon="recipe"></span>Дерево
+            </button>
+            <button class="view-tab" role="tab" aria-selected="false" data-tab="alternates">
+              <span data-icon="refresh"></span>Альтернативы
+            </button>
+            <button class="view-tab" role="tab" aria-selected="false" data-tab="build">
+              <span data-icon="factory"></span>Здания и рецепты
+            </button>
+            <button class="view-tab" role="tab" aria-selected="false" data-tab="balance">
+              <span data-icon="table"></span>Баланс предметов
+            </button>
+            <button class="view-tab" role="tab" aria-selected="false" data-tab="compare">
+              <span data-icon="compare"></span>Сравнение целей
+            </button>
+            <div class="tabs-spacer"></div>
+            <button class="icon-button mobile-settings" id="toggle-settings" title="Настройки">
+              <span data-icon="settings"></span>
+            </button>
+          </div>
+          <div class="view-content" id="view-graph">
+            <div class="graph-toolbar">
+              <div class="graph-search-wrap">
+                <div class="search-box">
+                  <span data-icon="search"></span
+                  ><input
+                    type="search"
+                    id="graph-search"
+                    placeholder="Найти продукт или рецепт…"
+                    aria-label="Найти процесс на схеме"
+                    autocomplete="off"
+                  />
+                </div>
+                <div id="graph-search-results" class="graph-search-results" hidden></div>
+              </div>
+              <label class="graph-spacing"
+                ><span>Расстояние</span
+                ><select id="graph-spacing" aria-label="Расстояние между этапами">
+                  <option value="wide">Широко</option>
+                  <option value="extra">Ещё шире</option>
+                </select></label
+              >
+              <div class="graph-tools">
+                <button id="clear-focus" class="button small subtle" hidden>Все процессы</button
+                ><button id="graph-transport" class="button small ghost" title="Конвейеры и трубы">
+                  <span data-icon="settings"></span>Логистика</button
+                ><button
+                  id="graph-start"
+                  class="button small subtle"
+                  title="Перейти к добыче сырья"
+                >
+                  Сырьё</button
+                ><button
+                  id="graph-target"
+                  class="button small subtle"
+                  title="Перейти к целевому выпуску"
+                >
+                  Выпуск</button
+                ><button
+                  id="fit-graph"
+                  class="button small ghost"
+                  title="Уменьшить и показать всю схему"
+                >
+                  <span data-icon="fit"></span><span>Вся схема</span></button
+                ><button
+                  id="expand-canvas"
+                  class="icon-button"
+                  title="Развернуть схему"
+                  aria-label="Развернуть схему"
+                >
+                  <span data-icon="expand"></span></button
+                ><button
+                  id="export-svg"
+                  class="icon-button"
+                  title="Скачать схему SVG"
+                  aria-label="Скачать схему SVG"
+                >
+                  <span data-icon="download"></span>
+                </button>
+              </div>
+            </div>
+            <div id="graph-wrap">
+              <div id="graph-canvas" aria-label="Интерактивная схема потоков производства"></div>
+              <div class="graph-empty" id="graph-empty">
+                <span class="spinner large"></span
+                ><strong>Собираем производственную цепочку</strong>
+                <p>Рассчитываем рецепты, ресурсы и потоки</p>
+              </div>
+              <aside class="inspector" id="inspector" hidden></aside>
+              <div class="graph-zoom">
+                <button id="zoom-out" aria-label="Отдалить"><span data-icon="minus"></span></button
+                ><button id="zoom-value" aria-label="Вернуть масштаб 100%">100%</button
+                ><button id="zoom-in" aria-label="Приблизить">
+                  <span data-icon="plus"></span>
+                </button>
+              </div>
+              <div id="graph-overview-hint" class="graph-overview-hint" hidden>
+                <span>Общий вид</span><button id="readable-view">Вернуть 100%</button>
+              </div>
+            </div>
+            <div class="graph-footer">
+              <span
+                ><i class="legend-line"></i
+                ><strong id="graph-summary">Схема производства</strong></span
+              ><span>Фон - перемещение / колесо - масштаб / миникарта - переход</span>
+            </div>
+          </div>
+          <div class="view-content table-view" id="view-build" hidden></div>
+          <div class="view-content table-view" id="view-dependencies" hidden></div>
+          <div class="view-content table-view" id="view-alternates" hidden></div>
+          <div class="view-content table-view" id="view-balance" hidden></div>
+          <div class="view-content compare-view" id="view-compare" hidden></div>
+        </section>
+        <div id="plan-notes" class="plan-notes"></div>
+        <footer class="workspace-footer">
+          <span>Независимый фанатский инструмент / Satisfactory © Coffee Stain Studios</span
+          ><button class="text-button" id="data-info">Данные и метод расчёта</button>
+        </footer>
+      </main>
+    </div>
+    <dialog id="picker-dialog" class="picker-dialog">
+      <div class="dialog-heading">
+        <div>
+          <div class="eyebrow">КАТАЛОГ ПРЕДМЕТОВ</div>
+          <h2 id="picker-title">Добавить продукт</h2>
+        </div>
+        <button class="icon-button" data-close-dialog aria-label="Закрыть">
+          <span data-icon="close"></span>
+        </button>
+      </div>
+      <div class="search-box">
+        <span data-icon="search"></span
+        ><input
+          type="search"
+          id="item-search"
+          placeholder="Каркас, frame, uranium…"
+          aria-label="Поиск предмета"
+        />
+      </div>
+      <div id="picker-list" class="picker-list"></div>
+    </dialog>
+    <dialog id="settings-dialog" class="settings-dialog">
+      <div class="dialog-heading">
+        <div>
+          <div class="eyebrow" id="settings-eyebrow">НАСТРОЙКИ ПЛАНА</div>
+          <h2 id="settings-title">Настройки</h2>
+        </div>
+        <button class="icon-button" data-close-dialog aria-label="Закрыть">
+          <span data-icon="close"></span>
+        </button>
+      </div>
+      <div id="settings-body" class="settings-body"></div>
+      <div class="dialog-footer">
+        <span id="settings-footnote">Изменения применяются автоматически</span
+        ><button class="button primary" data-close-dialog>Готово</button>
+      </div>
+    </dialog>
+    <div class="toast" id="toast" role="status" hidden></div>
+    <input type="file" id="save-file" accept=".sav" hidden />
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,31 @@
+Satisfactory save import dependencies
+
+The save-reader-tools.js bundle includes:
+
+@etothepii/satisfactory-file-parser 4.1.2, MIT
+https://github.com/etothepii4/satisfactory-file-parser/tree/9574911981d0cda60a554900d487738c38c9cf11
+License: satisfactory-file-parser-LICENSE.txt
+
+pako 2.2.0, MIT and Zlib
+https://github.com/nodeca/pako/tree/2.2.0
+Licenses: pako-LICENSE.txt and pako-zlib-LICENSE.txt
+
+The property type-node reader is modified to enforce a depth limit of 12,
+128 total nodes and 32 children per node before allocation
+The surrounding selective save-container reader is original Factory Lens code
+
+Bundle entry: scripts/save-reader-vendor-entry.mjs
+Build with esbuild 0.25.12 and the dependency versions above
+Options: bundle: true, format: esm, platform: browser, minify: true, legalComments: eof
+Output: dist/vendor/save-reader-tools.js
+Preserve all MIT and Zlib notices when distributing the bundle
+
+Additional format reference:
+https://github.com/AnthorNet/SC-InteractiveMap/blob/dev/src/SaveParser/Read.js
+
+Unlock mappings use Satisfactory 1.2.3.1 build 495413 CommunityResources/Docs/en-US.json
+https://github.com/0xjc/SatisfactoryLP/blob/2a4e3e134308a7d1cb0f3ff6b6968a0acf82281d/Docs.json
+Source SHA-256: 2351035c70bfe83374eefe048ec292364ff3e9867698e2477a01c3a297584a73
+
+Optional test saves come from src/test in the pinned parser repository
+Real saves and player data are not distributed with Factory Lens
