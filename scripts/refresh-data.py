@@ -20,6 +20,9 @@ EXTRACTION_BUILDINGS = {
     "Build_MinerMk1_C", "Build_MinerMk2_C", "Build_MinerMk3_C", "Build_OilPump_C",
     "Build_WaterPump_C", "Build_FrackingSmasher_C", "Build_FrackingExtractor_C",
 }
+NUCLEAR_BUILDING = "Build_GeneratorNuclear_C"
+NUCLEAR_RECIPES = {"Recipe_UraniumWaste_C", "Recipe_PlutoniumWaste_C"}
+WASTE_EXTERNAL_INPUTS = {"Desc_NuclearWaste_C", "Desc_PlutoniumWaste_C"}
 
 
 def read_source(value: str) -> bytes:
@@ -38,6 +41,10 @@ def strip_markup(value: str) -> str:
     return re.sub(r"<[^>]*>", " ", value).strip()
 
 
+def localized_name(ru: dict, section: str, key: str, fallback: str) -> str:
+    return ru.get(section, {}).get(key, {}).get("name", fallback).replace("—", "-").replace("–", "-")
+
+
 def normalize(raw: dict, ru: dict, fingerprint: str, game_version: str) -> dict:
     item_records = raw["itemsData"] | raw["toolsData"]
     ru_items = ru.get("itemsData", {}) | ru.get("toolsData", {})
@@ -46,9 +53,11 @@ def normalize(raw: dict, ru: dict, fingerprint: str, game_version: str) -> dict:
         key: val for key, val in raw_buildings.items()
         if val.get("category") == "production"
     }
+    generator_buildings = {NUCLEAR_BUILDING: raw_buildings[NUCLEAR_BUILDING]}
+    recipe_buildings = factory_buildings | generator_buildings
     all_machine_buildings = factory_buildings | {
         key: raw_buildings[key] for key in EXTRACTION_BUILDINGS if key in raw_buildings
-    }
+    } | generator_buildings
     mined_ids = {key for key, val in item_records.items() if val.get("category") == "ore"}
     raw_ids = mined_ids | {"Desc_Water_C", "Desc_LiquidOil_C", "Desc_NitrogenGas_C"}
 
@@ -88,26 +97,35 @@ def normalize(raw: dict, ru: dict, fingerprint: str, game_version: str) -> dict:
     used_items = set(raw_ids)
     for recipe_id, recipe in raw["recipesData"].items():
         producers = [class_id(value) for value in recipe.get("mProducedIn", [])]
-        producers = [value for value in producers if value in factory_buildings]
+        producers = [value for value in producers if value in factory_buildings or
+                     (value == NUCLEAR_BUILDING and recipe_id in NUCLEAR_RECIPES)]
         if not producers:
             continue
         if len(producers) != 1:
             raise ValueError(f"Ambiguous factory building for {recipe_id}: {producers}")
         building_id = producers[0]
-        building = factory_buildings[building_id]
+        building = recipe_buildings[building_id]
+        generator = building_id in generator_buildings
         seconds = float(recipe["mManufactoringDuration"])
         if seconds <= 0:
             raise ValueError(f"Non-positive craft duration: {recipe_id}")
         inputs = rates(recipe.get("ingredients", {}), seconds)
         outputs = rates(recipe.get("produce", {}), seconds)
+        if generator:
+            supplemental_item = building["supplementalLoadType"]
+            if item_form(supplemental_item) not in ("liquid", "gas"):
+                raise ValueError(f"Unexpected nuclear supplemental resource: {supplemental_item}")
+            inputs[supplemental_item] = (
+                float(building["supplementalLoadRatio"]) * float(building["powerGenerated"]) * 60 / 1000
+            )
         if not outputs or any(value <= 0 for value in outputs.values()):
             raise ValueError(f"Invalid recipe products: {recipe_id}")
         used_items.update(inputs)
         used_items.update(outputs)
         power_pair = building.get("powerUsedRecipes", {}).get(recipe_id)
-        if power_pair is None and "powerUsed" not in building:
+        if not generator and power_pair is None and "powerUsed" not in building:
             raise ValueError(f"Missing recipe power data: {recipe_id}")
-        minimum, maximum = (map(float, power_pair) if power_pair is not None
+        minimum, maximum = ((0.0, 0.0) if generator else map(float, power_pair) if power_pair is not None
                             else (float(building["powerUsed"]), float(building["powerUsed"])))
         if maximum < minimum:
             raise ValueError(f"Invalid power range: {recipe_id}")
@@ -117,7 +135,7 @@ def normalize(raw: dict, ru: dict, fingerprint: str, game_version: str) -> dict:
         alternate = name.startswith("Alternate:") and recipe_id not in research_unlocked
         normalized = {
             "id": recipe_id, "name": name,
-            "nameRu": ru.get("recipesData", {}).get(recipe_id, {}).get("name", name),
+            "nameRu": localized_name(ru, "recipesData", recipe_id, name),
             "alternate": alternate, "buildingId": building_id, "time": seconds,
             "unlockType": "hardDrive" if alternate else "research" if recipe_id in research_unlocked else "standard",
             "inputs": inputs, "outputs": outputs,
@@ -126,18 +144,20 @@ def normalize(raw: dict, ru: dict, fingerprint: str, game_version: str) -> dict:
             "seasonal": seasonal, "conversion": conversion,
             "defaultEnabled": not seasonal,
         }
+        if generator:
+            normalized.update({"generator": True, "generationMW": float(building["powerGenerated"])})
         recipes.append(normalized)
 
     produced = {key for recipe in recipes for key in recipe["outputs"]}
     consumed = {key for recipe in recipes for key in recipe["inputs"]}
-    external_ids = consumed - produced - raw_ids
+    external_ids = (consumed - produced - raw_ids) | WASTE_EXTERNAL_INPUTS
     items = []
     for item_id in sorted(used_items):
         item = item_records[item_id]
         form = item_form(item_id)
         record = {
             "id": item_id, "name": item["name"],
-            "nameRu": ru_items.get(item_id, {}).get("name", item["name"]),
+            "nameRu": ru_items.get(item_id, {}).get("name", item["name"]).replace("—", "-").replace("–", "-"),
             "form": form, "raw": item_id in raw_ids,
             "external": item_id in external_ids,
             "sinkable": form == "solid" and item.get("resourceSinkPoints", 0) > 0,
@@ -151,15 +171,18 @@ def normalize(raw: dict, ru: dict, fingerprint: str, game_version: str) -> dict:
 
     buildings = []
     for building_id, building in all_machine_buildings.items():
-        buildings.append({
+        record = {
             "id": building_id, "name": building["name"],
-            "nameRu": ru.get("buildingsData", {}).get(building_id, {}).get("name", building["name"]),
+            "nameRu": localized_name(ru, "buildingsData", building_id, building["name"]),
             "powerMW": float(building.get("powerUsed", 0)),
             "powerExponent": 1.321929,
             "variablePower": bool(building.get("powerUsedRecipes")),
             "icon": f"icons/{building_id}.png", "iconSourceUrl": building.get("image"),
             "width": building.get("width"), "length": building.get("length"),
-        })
+        }
+        if building_id in generator_buildings:
+            record.update({"generator": True, "generationMW": float(building["powerGenerated"]), "powerExponent": 1})
+        buildings.append(record)
 
     resources = []
     for item_id in sorted(mined_ids):
@@ -189,11 +212,14 @@ def normalize(raw: dict, ru: dict, fingerprint: str, game_version: str) -> dict:
             "sourceUrl": SOURCE, "localizationSourceUrl": LOCALIZED_SOURCE,
             "sourceSha256": fingerprint,
             "fetchedAt": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
-            "coverage": f"{len(recipes)} machine recipes, {sum(r['alternate'] for r in recipes)} marked alternate, {len(factory_buildings)} production building types",
+            "coverage": f"{sum(not r.get('generator') for r in recipes)} manufacturing recipes, {sum(r.get('generator', False) for r in recipes)} nuclear fuel processes, {sum(r['alternate'] for r in recipes)} marked alternate, {len(factory_buildings)} production building types",
             "counts": {"items": len(items), "recipes": len(recipes),
+                       "manufacturingRecipes": sum(not r.get("generator") for r in recipes),
+                       "generatorProcesses": sum(r.get("generator", False) for r in recipes),
                        "alternates": sum(r["alternate"] for r in recipes),
                        "seasonalRecipes": sum(r["seasonal"] for r in recipes),
                        "productionBuildings": len(factory_buildings),
+                       "generatorBuildings": len(generator_buildings),
                        "externalInputs": len(external_ids)},
             "minerPowerMW": {"1": 5, "2": 15, "3": 45},
             "minerNormalRate": {"1": 60, "2": 120, "3": 240},
@@ -204,8 +230,10 @@ def normalize(raw: dict, ru: dict, fingerprint: str, game_version: str) -> dict:
                 "Charcoal, Biocoal, Compacted Coal and Polyester Fabric are MAM research recipes despite their legacy Alternate names",
                 "Rates use items/min and m3/min at 100% clock",
                 "Variable power uses the midpoint of the source range, with both endpoints retained",
-                "Seasonal recipes are disabled by default; limited inputs and nuclear waste require an explicit external supply",
-                "Power generation and reactor waste production are outside this production model",
+                "Seasonal recipes are disabled by default; limited hand-collected inputs require an explicit external supply",
+                "Uranium and plutonium fuel burning include fuel, cooling water and waste; generated power is reported separately from consumption",
+                "Other power generation, Ficsonium fuel burning and power-grid balancing are outside this production model",
+                "Nuclear waste retains optional external inputs with a default limit of zero for existing-plant supplies and saved-plan compatibility",
                 "Resource well pressurizer power must be added for the actual well layout",
                 "The planner offers map scarcity, equal and custom resource weights",
             ],
@@ -233,6 +261,14 @@ def validate(data: dict) -> None:
     assert by_id["Recipe_Alternate_PureIronIngot_C"]["outputs"]["Desc_IronIngot_C"] == 65
     assert by_id["Recipe_AluminaSolution_C"]["outputs"]["Desc_AluminaSolution_C"] == 120
     assert by_id["Recipe_QuantumEnergy_C"]["outputs"]["Desc_QuantumEnergy_C"] == 200
+    for key in NUCLEAR_RECIPES:
+        recipe = by_id[key]
+        assert recipe["generator"] and recipe["generationMW"] == 2500
+        assert recipe["powerMW"] == 0 and recipe["inputs"]["Desc_Water_C"] == 240
+    assert by_id["Recipe_UraniumWaste_C"]["inputs"]["Desc_NuclearFuelRod_C"] == 0.2
+    assert by_id["Recipe_UraniumWaste_C"]["outputs"]["Desc_NuclearWaste_C"] == 10
+    assert by_id["Recipe_PlutoniumWaste_C"]["inputs"]["Desc_PlutoniumFuelRod_C"] == 0.1
+    assert by_id["Recipe_PlutoniumWaste_C"]["outputs"]["Desc_PlutoniumWaste_C"] == 1
 
 
 def verify_docs(data: dict, docs_path: str, version: str | None) -> dict:
@@ -242,8 +278,8 @@ def verify_docs(data: dict, docs_path: str, version: str | None) -> dict:
     doc_groups = json.loads(payload.decode(encoding))
     docs = {entry["ClassName"]: entry for group in doc_groups for entry in group["Classes"]}
     native = {entry["ClassName"]: group["NativeClass"] for group in doc_groups for entry in group["Classes"]}
-    normalized = {recipe["id"]: recipe for recipe in data["recipes"]}
-    buildings = {recipe["buildingId"] for recipe in data["recipes"]}
+    normalized = {recipe["id"]: recipe for recipe in data["recipes"] if not recipe.get("generator")}
+    buildings = {recipe["buildingId"] for recipe in normalized.values()}
     items = {item["id"]: item for item in data["items"]}
     doc_recipes = {
         key: entry for key, entry in docs.items()
@@ -270,8 +306,28 @@ def verify_docs(data: dict, docs_path: str, version: str | None) -> dict:
             minimum = maximum = float(building["mPowerConsumption"])
         if not math.isclose(minimum, recipe["powerMinMW"], abs_tol=1e-8) or not math.isclose(maximum, recipe["powerMaxMW"], abs_tol=1e-8):
             raise ValueError(f"Recipe power mismatch: {key}")
+    generators = [recipe for recipe in data["recipes"] if recipe.get("generator")]
+    for recipe in generators:
+        building = docs[recipe["buildingId"]]
+        generation = float(building["mPowerProduction"])
+        fuel = next((entry for entry in building["mFuel"] if entry.get("mByproduct") in recipe["outputs"]), None)
+        if not fuel:
+            raise ValueError(f"Generator waste not found in Docs: {recipe['id']}")
+        energy = float(docs[fuel["mFuelClass"]]["mEnergyValue"])
+        fuel_rate = generation * 60 / energy
+        inputs = {fuel["mFuelClass"]: fuel_rate,
+                  fuel["mSupplementalResourceClass"]: float(building["mSupplementalToPowerRatio"]) * generation * 60 / 1000}
+        outputs = {fuel["mByproduct"]: fuel_rate * float(fuel["mByproductAmount"])}
+        for field, expected in (("inputs", inputs), ("outputs", outputs)):
+            if set(recipe[field]) != set(expected) or any(not math.isclose(value, recipe[field][item], abs_tol=1e-8) for item, value in expected.items()):
+                raise ValueError(f"Generator quantity mismatch: {recipe['id']}, {field}")
+        if not math.isclose(recipe["generationMW"], generation, abs_tol=1e-8) or recipe["powerMW"] != 0:
+            raise ValueError(f"Generator power mismatch: {recipe['id']}")
+        if not math.isclose(recipe["time"], energy / generation, abs_tol=1e-8):
+            raise ValueError(f"Generator burn duration mismatch: {recipe['id']}")
     return {"version": version, "sha256": hashlib.sha256(payload).hexdigest(),
-            "recipeCount": len(doc_recipes), "matched": ["coverage", "inputs", "outputs", "time", "powerMinMW", "powerMaxMW"]}
+            "recipeCount": len(doc_recipes), "matched": ["coverage", "inputs", "outputs", "time", "powerMinMW", "powerMaxMW"],
+            "generatorProcesses": len(generators), "generatorMatched": ["fuel", "water", "waste", "time", "generationMW"]}
 
 
 def download_icons(data: dict, output_dir: Path) -> None:
@@ -320,6 +376,12 @@ def main() -> None:
     russian_bytes = read_source(args.locale_source)
     data = normalize(json.loads(english_bytes), json.loads(russian_bytes),
                      hashlib.sha256(english_bytes).hexdigest(), args.game_version)
+    if args.output.is_file():
+        previous = json.loads(args.output.read_text(encoding="utf-8"))
+        if previous.get("meta", {}).get("sourceSha256") == data["meta"]["sourceSha256"] and previous.get("recipes") == data["recipes"]:
+            for key in ("docsVerification", "recipeAudit", "nuclearVerification"):
+                if key in previous["meta"]:
+                    data["meta"][key] = previous["meta"][key]
     if args.verify_docs:
         data["meta"]["docsVerification"] = verify_docs(data, args.verify_docs, args.verify_version)
     if args.download_icons:

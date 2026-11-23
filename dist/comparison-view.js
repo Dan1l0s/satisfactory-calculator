@@ -25,10 +25,13 @@ function signed(value, format) {
   return `${value < 0 ? '−' : value > 0 ? '+' : ''}${format.num(Math.abs(value), 2)}`;
 }
 
-function deltaView(row, unit, format, neutral = false) {
+function deltaView(row, unit, format, neutral = false, generation = false) {
   const direction = row.delta < 0 ? 'decrease' : row.delta > 0 ? 'increase' : 'same';
+  const tone = generation && direction !== 'same'
+    ? direction === 'increase' ? 'decrease' : 'increase'
+    : direction;
   const label = row.delta < 0 ? 'Меньше' : row.delta > 0 ? 'Больше' : 'Без изменений';
-  return `<div class="comparison-delta ${neutral ? 'is-neutral' : `is-${direction}`}">
+  return `<div class="comparison-delta ${neutral ? 'is-neutral' : `is-${tone}`}">
     <strong>${signed(row.delta, format)}${unit ? ` <span>${format.esc(unit)}</span>` : ''}</strong>
     ${row.percent !== null ? `<span class="comparison-percent">${signed(row.percent, format)}%</span>` : ''}
     <small>${label}</small>
@@ -49,7 +52,7 @@ function metricView(key, label, unit, values, objective, format, hasBefore = tru
   return `<article class="comparison-metric${objective === key ? ' is-objective' : ''}">
     <div class="comparison-metric-label">${label}${objective === key ? '<span class="comparison-objective">Цель расчёта</span>' : ''}</div>
     ${beforeAfter(values.before, values.after, unit, format, hasBefore, labels)}
-    ${hasBefore ? deltaView(values, unit, format) : ''}
+    ${hasBefore ? deltaView(values, unit, format, false, key === 'generation') : ''}
   </article>`;
 }
 
@@ -94,9 +97,12 @@ export function renderPlanDelta({ current, next, objective, format }) {
   const comparison = comparePlans(current, next);
   const metrics = [
     ['resources', 'Ресурсный индекс', ''],
-    ['energy', 'Энергия', 'МВт'],
+    ['energy', 'Потребление', 'МВт'],
     ['buildings', 'Здания при 100%', 'зд'],
   ];
+  if (comparison.metrics.generation)
+    metrics.push(['generation', 'Выработка АЭС', 'МВт']);
+  const netPower = next.totals.powerMW - (next.totals.generationMW || 0);
   return `<section class="comparison-view comparison-plan">
     <div class="comparison-heading">
       <h4>${hasBefore ? 'Изменится во всём плане' : 'Показатели всего плана'}</h4>
@@ -105,6 +111,7 @@ export function renderPlanDelta({ current, next, objective, format }) {
     <div class="comparison-metric-grid">${metrics.map(([key, label, unit]) =>
       metricView(key, label, unit, comparison.metrics[key], objective, format, hasBefore)).join('')}</div>
     <p class="comparison-explanation">Ресурсный индекс учитывает объём добычи, редкость ресурсов и заданные вами веса</p>
+    ${comparison.metrics.generation ? `<p class="comparison-explanation">${netPower > 0 ? 'После выработки АЭС потребуется извне' : 'После потребления завода останется'} <strong>${format.num(Math.abs(netPower))} МВт</strong><br>Цель «Минимум энергии» сравнивает потребление, выработка показана отдельно</p>` : ''}
     <section class="comparison-resource-section">
       <h4>${hasBefore ? 'Что изменится в добыче' : 'Необходимая добыча'}</h4>
       ${changeGroups(comparison.resourceChanges, format, hasBefore)}
@@ -137,6 +144,7 @@ export function renderRecipeRates({ recipe, itemId, outputRate, reference, refer
     .filter((row) => row.item !== itemId);
   const machines = difference(reference?.machines || 0, normalized.machines);
   const power = difference(reference?.powerMW || 0, normalized.powerMW);
+  const generation = difference(reference?.generationMW || 0, normalized.generationMW || 0);
   const baselineLabel = referenceLabel || 'Сейчас';
   const labels = { before: baselineLabel, after: 'Этот рецепт' };
   return `<section class="comparison-view comparison-recipe">
@@ -148,7 +156,8 @@ export function renderRecipeRates({ recipe, itemId, outputRate, reference, refer
     <p class="comparison-explanation">Одинаковый выпуск используется только для сравнения этого участка${hasBefore ? `<br>Исходный вариант: <strong>${format.esc(baselineLabel)}</strong>` : ''}</p>
     <div class="comparison-local-metrics">
       ${metricView('buildings', 'Здания участка при 100%', 'зд', machines, null, format, hasBefore, labels)}
-      ${metricView('energy', 'Энергия участка', 'МВт', power, null, format, hasBefore, labels)}
+      ${metricView('energy', 'Потребление участка', 'МВт', power, null, format, hasBefore, labels)}
+      ${generation.before > 0 || generation.after > 0 ? metricView('generation', 'Выработка участка', 'МВт', generation, null, format, hasBefore, labels) : ''}
     </div>
     <section class="comparison-resource-section"><h4>Ингредиенты участка</h4>
       ${flowTable(inputRows, format, { hasBefore, labels })}
@@ -161,7 +170,7 @@ export function renderRecipeRates({ recipe, itemId, outputRate, reference, refer
       <summary>Одно здание при 100% <span>Нормы из игры</span></summary>
       <div class="comparison-baseline-meta">
         <span>Цикл <strong>${format.num(recipe.time)} с</strong></span>
-        <span>Средняя мощность <strong>${format.num(recipe.powerMW)} МВт</strong></span>
+        <span>${recipe.generator ? 'Выработка' : 'Потребление'} <strong>${format.num(recipe.generator ? recipe.generationMW : recipe.powerMW)} МВт</strong></span>
       </div>
       <div class="comparison-baseline-grid">
         ${baselineFlows(recipe.inputs, 'Вход за минуту / Inputs', format)}

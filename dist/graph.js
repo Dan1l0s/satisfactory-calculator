@@ -338,6 +338,7 @@ export function buildOverviewData(flow, expanded = new Set()) {
     const nameEn = raw ? 'Resource extraction' : building?.name || members[0].buildingName;
     const totalmachines = members.reduce((sum, n) => sum + (Number(n.data.machines) || 0), 0);
     const powerMW = members.reduce((sum, n) => sum + (Number(n.data.powerMW) || 0), 0);
+    const generationMW = members.reduce((sum, n) => sum + (Number(n.data.generationMW) || 0), 0);
     const node = {
       id,
       kind: 'module',
@@ -360,6 +361,7 @@ export function buildOverviewData(flow, expanded = new Set()) {
         totalmachines,
         machines: totalmachines,
         powerMW,
+        generationMW,
         recipeCount: raw ? 0 : members.length,
         resourceCount: raw ? members.length : 0,
         internalFlows: [],
@@ -2072,7 +2074,7 @@ export function createGraph(
       svgEl(
         'title',
         {},
-        `${node.nameRu}\n${node.nameEn}\n${subtitle}\n${num(node.rate)} ${units(node.itemId)}${record.powerMW != null ? `\n${num(record.powerMW)} МВт` : ''}${machines != null ? `\nЗдания: ${num(machines)}` : ''}`,
+        `${node.nameRu}\n${node.nameEn}\n${subtitle}\n${num(node.rate)} ${units(node.itemId)}${record.generationMW > 0 ? `\nВыработка: ${num(record.generationMW)} МВт` : record.powerMW != null ? `\nПотребление: ${num(record.powerMW)} МВт` : ''}${machines != null ? `\nЗдания: ${num(machines)}` : ''}`,
       ),
     );
     group.addEventListener('pointerenter', () => highlightNode(node.id));

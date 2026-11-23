@@ -44,6 +44,8 @@ export function comparePlans(before, after) {
         values(finite(before?.totals?.[field]), finite(after?.totals?.[field])),
       ]),
   );
+  if (before?.totals?.generationMW > 0 || after?.totals?.generationMW > 0)
+    metrics.generation = values(finite(before?.totals?.generationMW), finite(after?.totals?.generationMW));
   return {
     metrics,
     resourceChanges: rateChanges(before?.resources, after?.resources),
@@ -81,6 +83,7 @@ export function recipeForOutput(recipe, itemId, outputRate) {
     inputs: scaleFlows(recipe.inputs, machines),
     outputs: scaleFlows(recipe.outputs, machines),
     powerMW: scaled(recipe.powerMW, machines),
+    ...(recipe.generationMW > 0 ? { generationMW: scaled(recipe.generationMW, machines) } : {}),
   };
 }
 
@@ -92,9 +95,11 @@ export function currentProductionForOutput(data, result, itemId, outputRate) {
   );
   if (!rows.length) return null;
   const total = { machines: 0, inputs: {}, outputs: {}, powerMW: 0 };
+  let generationMW = 0;
   for (const row of rows) {
     total.machines += scaled(row.machines, 1);
     total.powerMW += scaled(row.powerMW, 1);
+    generationMW += scaled(row.generationMW || 0, 1);
     for (const field of ['inputs', 'outputs']) {
       for (const [item, rate] of Object.entries(row[field] || {}))
         total[field][item] = (total[field][item] || 0) + scaled(rate, 1);
@@ -110,5 +115,6 @@ export function currentProductionForOutput(data, result, itemId, outputRate) {
     inputs: scaleFlows(total.inputs, multiplier),
     outputs: scaleFlows(total.outputs, multiplier),
     powerMW: scaled(total.powerMW, multiplier),
+    ...(generationMW > 0 ? { generationMW: scaled(generationMW, multiplier) } : {}),
   };
 }

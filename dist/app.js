@@ -410,6 +410,7 @@ function showRecipeStart() {
     $(id).textContent = '-';
   $('metric-alternates').textContent = 'После выбора рецептов';
   $('energy-note').textContent = 'производство + добыча';
+  $('nuclear-energy').hidden = true;
   $('plan-notes').innerHTML = '';
   $('graph-summary').textContent = 'Сначала выберите набор рецептов';
   for (const id of ['view-build', 'view-balance', 'view-compare']) $(id).innerHTML = '';
@@ -486,11 +487,14 @@ function showFailure(message) {
   $('metric-buildings').textContent = '-';
   $('metric-recipes').textContent = '-';
   $('metric-alternates').textContent = 'Проверьте ограничения';
+  $('nuclear-energy').hidden = true;
   $('graph-empty').classList.remove('recipe-start');
   $('graph-empty').hidden = false;
   $('graph-empty').innerHTML =
-    `${icon('warning')}<strong>План не сходится</strong><p>${esc(message)}</p><p>Проверьте лимиты сырья, доступные рецепты и внешние поставки. Нулевой лимит запрещает добычу; альтернативы и преобразования сами не включаются</p><button class="button ghost" id="failure-resources">Проверить ограничения</button>`;
+    `${icon('warning')}<strong>План не сходится</strong><p>${esc(message)}</p><p>Проверьте лимиты сырья, доступные рецепты и внешние поставки. Нулевой лимит запрещает добычу; альтернативы и преобразования сами не включаются</p><div class="failure-actions"><button class="button ghost" id="failure-resources">Лимиты сырья</button><button class="button ghost" id="failure-recipes">Доступные рецепты</button><button class="button ghost" id="failure-imports">Внешние поставки</button></div>`;
   $('failure-resources').onclick = () => openSettings('resources');
+  $('failure-recipes').onclick = () => openSettings('recipes');
+  $('failure-imports').onclick = () => openSettings('imports');
   for (const id of ['view-build', 'view-balance', 'view-compare'])
     $(id).innerHTML =
       `<div class="failed-card"><strong>Нет выполнимого плана</strong><p>${esc(message)}</p></div>`;
@@ -572,6 +576,14 @@ function renderResult() {
   $('energy-note').textContent = variable
     ? `${num(result.totals.powerMinMW, 0)}-${num(result.totals.powerMaxMW, 0)} МВт / диапазон`
     : 'производство + добыча';
+  const generation = result.totals.generationMW || 0;
+  const netPower = result.totals.powerMW - generation;
+  $('nuclear-energy').hidden = generation <= 1e-6;
+  $('nuclear-energy').innerHTML = generation > 1e-6
+    ? `<div><span>Выработка АЭС</span><strong>${num(generation, 1)} <small>МВт</small></strong></div>
+       <div><span>${netPower > 0 ? 'Нужно энергии извне' : 'Остаток после потребления завода'}</span><strong>${num(Math.abs(netPower), 1)} <small>МВт</small></strong></div>
+       <p>АЭС включены в цепочку получения отходов вместе с топливом и водой<br>Цель «Минимум энергии» сравнивает потребление завода, выработка показана отдельно</p>`
+    : '';
   updateGraphSummary();
   const notes = [];
   if (!state.alternates && !alts)
@@ -806,7 +818,7 @@ function renderBuild() {
       .map((r) => {
         const rec = recipeMap.get(r.recipeId);
         const main = itemMap.get(Object.keys(r.outputs)[0]);
-        return `<tr data-inspect-recipe="${esc(r.recipeId)}"><td><div class="table-name">${itemIcon(main, 'small')}<span>${dual(rec)}${rec?.alternate ? '<span class="alternate-badge">ALT</span>' : ''}</span></div></td><td>${dual(buildingMap.get(r.buildingId))}</td><td class="numeric">${num(r.machines, 3)}</td><td class="numeric">${num(r.powerMW, 1)}</td><td class="flow-list">${flowList(r.outputs)}</td></tr>`;
+        return `<tr data-inspect-recipe="${esc(r.recipeId)}"><td><div class="table-name">${itemIcon(main, 'small')}<span>${dual(rec)}${rec?.alternate ? '<span class="alternate-badge">ALT</span>' : ''}</span></div></td><td>${dual(buildingMap.get(r.buildingId))}</td><td class="numeric">${num(r.machines, 3)}</td><td class="numeric">${r.generationMW > 0 ? `<strong class="positive">+${num(r.generationMW, 1)}</strong><span class="cell-sub">Выработка АЭС</span>` : num(r.powerMW, 1)}</td><td class="flow-list">${flowList(r.outputs)}</td></tr>`;
       })
       .join(
         '',
@@ -900,7 +912,7 @@ async function renderComparison(force = false) {
       .map((mode) => {
         const r = comparisonCache[mode];
         const delta = r?.status === 'optimal' ? comparePlans(result, r).metrics : null;
-        return `<section class="comparison-card ${mode === state.objective ? 'selected' : ''}"><h3>${icon(symbols[mode])}${titles[mode]}</h3><p class="helper">${description[mode]}</p>${r?.status === 'optimal' ? `<div class="comparison-value"><span>Ресурсный индекс</span><strong>${num(r.totals.weightedResources, 1)}</strong></div>${comparisonDeltaLabel(delta.resources)}<div class="comparison-value"><span>Энергия, МВт</span><strong>${num(r.totals.powerMW, 1)}</strong></div>${comparisonDeltaLabel(delta.energy, 'МВт')}<div class="comparison-value"><span>Зданий</span><strong>${num(r.totals.machines, 2)}</strong></div>${comparisonDeltaLabel(delta.buildings, 'зд')}<div class="comparison-value"><span>Рецептов / альтернатив</span><strong>${r.recipes.length} / ${r.recipes.filter((x) => recipeMap.get(x.recipeId)?.alternate).length}</strong></div><p class="helper">Разница относительно текущего плана</p><button class="button ${mode === state.objective ? 'subtle' : 'ghost'}" data-apply-mode="${mode}" ${mode === state.objective ? 'disabled' : ''}>${mode === state.objective ? 'Текущий план' : 'Применить этот план'}</button>` : r ? `<div class="failed-card">${esc(r.message)}</div>` : '<div class="empty-message"><span class="spinner"></span><p>Считаем цепочку…</p></div>'}</section>`;
+        return `<section class="comparison-card ${mode === state.objective ? 'selected' : ''}"><h3>${icon(symbols[mode])}${titles[mode]}</h3><p class="helper">${description[mode]}</p>${r?.status === 'optimal' ? `<div class="comparison-value"><span>Ресурсный индекс</span><strong>${num(r.totals.weightedResources, 1)}</strong></div>${comparisonDeltaLabel(delta.resources)}<div class="comparison-value"><span>Потребление, МВт</span><strong>${num(r.totals.powerMW, 1)}</strong></div>${comparisonDeltaLabel(delta.energy, 'МВт')}${r.totals.generationMW > 0 ? `<div class="comparison-value"><span>Выработка АЭС, МВт</span><strong>${num(r.totals.generationMW, 1)}</strong></div><span class="comparison-change unchanged">${r.totals.netPowerMW > 0 ? 'Нужно извне' : 'Остаток после потребления'}: ${num(Math.abs(r.totals.netPowerMW), 1)} МВт</span>` : ''}<div class="comparison-value"><span>Зданий</span><strong>${num(r.totals.machines, 2)}</strong></div>${comparisonDeltaLabel(delta.buildings, 'зд')}<div class="comparison-value"><span>Рецептов / альтернатив</span><strong>${r.recipes.length} / ${r.recipes.filter((x) => recipeMap.get(x.recipeId)?.alternate).length}</strong></div><p class="helper">Разница относительно текущего плана</p><button class="button ${mode === state.objective ? 'subtle' : 'ghost'}" data-apply-mode="${mode}" ${mode === state.objective ? 'disabled' : ''}>${mode === state.objective ? 'Текущий план' : 'Применить этот план'}</button>` : r ? `<div class="failed-card">${esc(r.message)}</div>` : '<div class="empty-message"><span class="spinner"></span><p>Считаем цепочку…</p></div>'}</section>`;
       })
       .join('');
     if (modes.every((m) => comparisonCache[m]?.status === 'optimal'))
@@ -1219,7 +1231,7 @@ function renderResourceSettings() {
       })
       .join(
         '',
-      )}<div class="note-bar neutral">${icon('info')}<span>Чистота не меняет потребность фабрики в руде. Она меняет производительность добывающего здания. Все добывающие здания работают на 100%</span></div><p class="helper">Ограниченные и ручные предметы, отходы реакторов и готовую продукцию добавляйте через «Готовые входящие ресурсы»</p><button class="button small ghost" id="reset-resource-settings">Сбросить лимиты и веса</button>`;
+      )}<div class="note-bar neutral">${icon('info')}<span>Чистота не меняет потребность фабрики в руде. Она меняет производительность добывающего здания. Все добывающие здания работают на 100%</span></div><p class="helper">Ограниченные предметы и готовую продукцию добавляйте через «Готовые входящие ресурсы». Отходы можно получить на АЭС внутри плана или указать уже доступную поставку</p><button class="button small ghost" id="reset-resource-settings">Сбросить лимиты и веса</button>`;
   $('reset-resource-settings').onclick = () => {
     state.resourceSettings = {};
     renderResourceSettings();
@@ -1251,7 +1263,7 @@ function renderResourceSettings() {
 function renderImportsSettings() {
   $('settings-title').textContent = 'Готовые входящие ресурсы';
   $('settings-body').innerHTML =
-    `<p class="settings-intro">Укажите, что уже поступает с другого завода. Это верхняя граница доступной поставки: решатель возьмёт только нужное количество. Производство и энергия этой поставки остаются за пределами текущего плана</p>${state.imports.length ? state.imports.map((i, index) => `<div class="import-row"><div class="table-name">${itemIcon(itemMap.get(i.item))}${dual(itemMap.get(i.item))}</div><input type="number" min="0.001" step="any" value="${i.rate}" data-import-index="${index}" aria-label="Входящая поставка ${esc(itemName(i.item))}"><span class="tiny-label">${unit(i.item)}</span><button class="icon-button" data-remove-import="${index}" aria-label="Удалить поставку">${icon('close')}</button></div>`).join('') : '<div class="empty-message">Пока нет внешних поставок<br>Все необходимые ресурсы добываются или производятся в плане</div>'}<button class="button add-button" id="add-import" style="margin-top:18px">${icon('plus')}Добавить поставку</button><p class="helper">Так можно задать урановые отходы от уже работающей электростанции, энергослизней, подарки или другие ограниченные материалы. Автоматическая генерация энергии и отходов электростанций в эту версию не входит</p>`;
+    `<p class="settings-intro">Укажите, что уже поступает с другого завода. Это верхняя граница доступной поставки: решатель возьмёт только нужное количество. Производство и энергия этой поставки остаются за пределами текущего плана</p>${state.imports.length ? state.imports.map((i, index) => `<div class="import-row"><div class="table-name">${itemIcon(itemMap.get(i.item))}${dual(itemMap.get(i.item))}</div><input type="number" min="0.001" step="any" value="${i.rate}" data-import-index="${index}" aria-label="Входящая поставка ${esc(itemName(i.item))}"><span class="tiny-label">${unit(i.item)}</span><button class="icon-button" data-remove-import="${index}" aria-label="Удалить поставку">${icon('close')}</button></div>`).join('') : '<div class="empty-message">Пока нет внешних поставок<br>Все необходимые ресурсы добываются или производятся в плане</div>'}<button class="button add-button" id="add-import" style="margin-top:18px">${icon('plus')}Добавить поставку</button><p class="helper">Так можно задать урановые отходы от уже работающей электростанции, энергослизней, подарки или другие ограниченные материалы. Без внешней поставки ядерные отходы производятся на АЭС внутри плана. Учитываются топливо, охлаждающая вода и выработка энергии</p>`;
   $('add-import').onclick = () => openPicker('import');
 }
 function renderAbout() {
@@ -1259,13 +1271,13 @@ function renderAbout() {
   const m = data.meta,
     c = m.counts || {};
   $('settings-body').innerHTML =
-    `<div class="about-copy"><div class="about-meta"><div><span>Версия данных</span><strong>${esc(m.gameVersion)}</strong></div><div><span>Дата снимка</span><strong>${esc((m.fetchedAt || '').slice(0, 10))}</strong></div><div><span>Производственные рецепты</span><strong>${data.recipes.length}</strong></div><div><span>Альтернативы с жёстких дисков</span><strong>${c.alternates || data.recipes.filter((r) => r.alternate).length}</strong></div><div><span>Сезонные рецепты</span><strong>${c.seasonalRecipes || 0}</strong></div></div><h3>Что минимизируется</h3><p><strong>Ресурсы:</strong> сумма потоков добычи, умноженных на заданные веса. По умолчанию вес учитывает доступность на обычной карте: максимальная добыча железа делится на максимальную добычу выбранного ресурса. Железо имеет вес 1, вода - 0. Можно выбрать равные веса или задать свои. Это условный индекс, а не физическая сумма масс</p><p><strong>Энергия:</strong> средняя мощность производства и добычи при 100% <strong>Здания:</strong> сумма дробных эквивалентов производственных и добывающих машин. Количество не округляется и индивидуальный разгон не подбирается</p><h3>Как работает решатель</h3><p>HiGHS решает общую задачу линейного программирования в WebAssembly. Для каждого предмета проверяется баланс: производство и входы покрывают расход и требуемый выпуск. Совместные продукты, альтернативы и возвраты решаются вместе. Расчёт работает в отдельном Web Worker</p><p>Положительный остаток показан как излишек. Это обязательный внешний выход схемы: потребитель, переработка или утилизация. Жидкость нельзя напрямую отправить в AWESOME Sink. Замкнутому циклу в игре может потребоваться стартовый запас</p><h3>Границы расчёта</h3><ul><li>Фиксированная частота 100%, дробные эквиваленты зданий. Somersloops, собственная генерация, физическая прокладка конвейеров и высота труб не моделируются</li><li>Количество параллельных конвейеров и труб рассчитывается по выбранному максимальному уровню. Насосы, освещение и общие прессуризаторы скважин не входят в мощность. Для работающего прессуризатора нужно отдельно добавить 150 МВт</li><li>Для зданий с переменной мощностью показывается средняя и диапазон. Энергия внешних поставок находится за границей плана</li><li>Промышленная база содержит Tier 9 и сезонные рецепты. Сезонные выключены по умолчанию. Открытые альтернативы можно прочитать из сохранения .sav или отметить вручную. Ручные запреты хранятся отдельно и сохраняются при повторном импорте. Прогресс HUB/MAM не ограничивает обычные рецепты автоматически</li><li>Каждая полоса - конвейер или труба выбранного уровня; большие пучки сворачиваются до шести видимых линий, с точным числом в подписи. Номинальная ёмкость и фактическая загрузка указаны отдельно. Пересечения оформлены эстакадами и не означают соединение потоков</li></ul><h3>Источники и обновление</h3><p>Снимок <a href="${esc(m.sourceUrl)}" target="_blank" rel="noreferrer">SCIM Stable</a> и <a href="${esc(m.localizationSourceUrl)}" target="_blank" rel="noreferrer">русская локализация</a>. Источник обозначает ветку Stable, без точного номера патча. ${m.docsVerification ? `Рецепты дополнительно сверены с игровым Docs ${esc(m.docsVerification.gameVersion || m.docsVerification.version || '1.2.3.1')}` : ''}</p><p>В исходниках есть воспроизводимый скрипт обновления <code>scripts/refresh-data.py</code>, сохранён SHA-256 источника. Все расчёты и изображения поставляются с приложением, внешние сервисы для расчёта не нужны</p><h3>Локальные планы и переносимость</h3><p>План сохраняется в localStorage этого браузера. Экспортируйте JSON для резервной копии. Кнопка «Поделиться» помещает параметры в часть ссылки после #. Доступ к самой странице зависит от её хостинга</p><p>Приложение статическое и подготовлено для GitHub Pages: в исходниках есть workflow публикации <a href="./factory-lens-source.zip" download>Скачать исходники и инструкцию</a>. Игровые названия и изображения принадлежат Coffee Stain Studios. Factory Lens - независимый фанатский инструмент</p></div>`;
+    `<div class="about-copy"><div class="about-meta"><div><span>Версия данных</span><strong>${esc(m.gameVersion)}</strong></div><div><span>Дата снимка</span><strong>${esc((m.fetchedAt || '').slice(0, 10))}</strong></div><div><span>Производственные рецепты</span><strong>${c.manufacturingRecipes || data.recipes.filter((r) => !r.generator).length}</strong></div><div><span>Процессы АЭС</span><strong>${c.generatorProcesses || 0}</strong></div><div><span>Альтернативы с жёстких дисков</span><strong>${c.alternates || data.recipes.filter((r) => r.alternate).length}</strong></div><div><span>Сезонные рецепты</span><strong>${c.seasonalRecipes || 0}</strong></div></div><h3>Что минимизируется</h3><p><strong>Ресурсы:</strong> сумма потоков добычи, умноженных на заданные веса. По умолчанию вес учитывает доступность на обычной карте: максимальная добыча железа делится на максимальную добычу выбранного ресурса. Железо имеет вес 1, вода - 0. Можно выбрать равные веса или задать свои. Это условный индекс, а не физическая сумма масс</p><p><strong>Энергия:</strong> средняя мощность производства и добычи при 100% <strong>Здания:</strong> сумма дробных эквивалентов производственных машин, добычи и АЭС. Количество не округляется и индивидуальный разгон не подбирается</p><h3>Как работает решатель</h3><p>HiGHS решает общую задачу линейного программирования в WebAssembly. Для каждого предмета проверяется баланс: производство и входы покрывают расход и требуемый выпуск. Совместные продукты, альтернативы и возвраты решаются вместе. Расчёт работает в отдельном Web Worker</p><p>Положительный остаток показан как излишек. Это обязательный внешний выход схемы: потребитель, переработка или утилизация. Жидкость нельзя напрямую отправить в AWESOME Sink. Замкнутому циклу в игре может потребоваться стартовый запас</p><h3>Границы расчёта</h3><ul><li>Фиксированная частота 100%, дробные эквиваленты зданий. АЭС с урановым и плутониевым топливом входят в цепочки получения отходов. Топливо, вода и выработка учитываются; остальные электростанции, Somersloops, физическая прокладка конвейеров и высота труб не моделируются</li><li>Количество параллельных конвейеров и труб рассчитывается по выбранному максимальному уровню. Насосы, освещение и общие прессуризаторы скважин не входят в мощность. Для работающего прессуризатора нужно отдельно добавить 150 МВт</li><li>Для зданий с переменной мощностью показывается средняя и диапазон. Энергия внешних поставок находится за границей плана</li><li>Промышленная база содержит Tier 9 и сезонные рецепты. Сезонные выключены по умолчанию. Открытые альтернативы можно прочитать из сохранения .sav или отметить вручную. Ручные запреты хранятся отдельно и сохраняются при повторном импорте. Прогресс HUB/MAM не ограничивает обычные рецепты автоматически</li><li>Каждая полоса - конвейер или труба выбранного уровня; большие пучки сворачиваются до шести видимых линий, с точным числом в подписи. Номинальная ёмкость и фактическая загрузка указаны отдельно. Пересечения оформлены эстакадами и не означают соединение потоков</li></ul><h3>АЭС и отходы</h3><p>Отходы производятся при сжигании топлива. АЭС добавляются автоматически, если они нужны для плутония или фиксония. Внешняя поставка отходов заменяет соответствующую часть реакторной цепочки. На каждую АЭС при 100% требуется 240 м³ воды в минуту, выработка составляет 2500 МВт. Генерация показана отдельно; цель «Минимум энергии» минимизирует потребление производства и добычи</p><h3>Источники и обновление</h3><p>Снимок <a href="${esc(m.sourceUrl)}" target="_blank" rel="noreferrer">SCIM Stable</a> и <a href="${esc(m.localizationSourceUrl)}" target="_blank" rel="noreferrer">русская локализация</a>. Источник обозначает ветку Stable, без точного номера патча. ${m.docsVerification ? `Рецепты дополнительно сверены с игровым Docs ${esc(m.docsVerification.gameVersion || m.docsVerification.version || '1.2.3.1')}` : ''}</p><p>В исходниках есть воспроизводимый скрипт обновления <code>scripts/refresh-data.py</code>, сохранён SHA-256 источника. Все расчёты и изображения поставляются с приложением, внешние сервисы для расчёта не нужны</p><h3>Локальные планы и переносимость</h3><p>План сохраняется в localStorage этого браузера. Экспортируйте JSON для резервной копии. Кнопка «Поделиться» помещает параметры в часть ссылки после #. Доступ к самой странице зависит от её хостинга</p><p>Приложение статическое и подготовлено для GitHub Pages: в исходниках есть workflow публикации <a href="./factory-lens-source.zip" download>Скачать исходники и инструкцию</a>. Игровые названия и изображения принадлежат Coffee Stain Studios. Factory Lens - независимый фанатский инструмент</p></div>`;
   if (m.recipeAudit)
     $('settings-body')
       .querySelector('.about-meta')
       .insertAdjacentHTML(
         'afterend',
-        `<h3>Проверка актуальности / ${esc(m.recipeAudit.checkedAt.slice(0, 10))}</h3><p>Сверены все ${num(m.recipeAudit.recipeCount)} производственных рецепта и ${num(m.recipeAudit.altCount)} альтернатив: здания, ингредиенты, продукты, время и мощность. Совпадение со свежим SCIM Stable, игровым Docs 1.2.3.1 и набором Satisfactory Tools ${esc(m.recipeAudit.verifiedDatasetVersion)}</p><p>Последний проверенный выпуск игры - ${esc(m.recipeAudit.latestRelease)}. В его <a href="https://store.steampowered.com/news/app/526870/view/679641571029680377" target="_blank" rel="noreferrer">официальных изменениях</a> указаны исправления сети; изменений рецептов не заявлено. Отдельная игровая выгрузка именно этого патча не сверялась <a href="./data/recipe-audit.json" target="_blank" rel="noreferrer">Полный отчёт проверки и источники</a></p><h3>Выбор рецептов</h3><p>Новый план сначала спрашивает про альтернативы. В базовом режиме отдельный рецепт можно выбрать через вершину, сохранив остальные выключенными. Импорт .sav обновляет доступность, не переключая режим. Преобразования сырья с SAM, включая боксит → уран, выключены отдельно; обычные рецепты в Converter остаются доступны</p>`,
+        `<h3>Проверка актуальности / ${esc(m.recipeAudit.checkedAt.slice(0, 10))}</h3><p>Проверено производственных рецептов: ${num(m.recipeAudit.recipeCount)}, включая ${num(m.recipeAudit.altCount)} альтернатив. Сверены здания, ингредиенты, продукты, время и мощность. Совпадение со свежим SCIM Stable, игровым Docs 1.2.3.1 и набором Satisfactory Tools ${esc(m.recipeAudit.verifiedDatasetVersion)}</p><p>Последний проверенный выпуск игры - ${esc(m.recipeAudit.latestRelease)}. В его <a href="https://store.steampowered.com/news/app/526870/view/679641571029680377" target="_blank" rel="noreferrer">официальных изменениях</a> указаны исправления сети; изменений рецептов не заявлено. Отдельная игровая выгрузка именно этого патча не сверялась. Два процесса АЭС дополнительно проверены по данным топлива и генератора, включая воду и отходы <a href="./data/recipe-audit.json" target="_blank" rel="noreferrer">Полный отчёт проверки и источники</a></p><h3>Выбор рецептов</h3><p>Новый план сначала спрашивает про альтернативы. В базовом режиме отдельный рецепт можно выбрать через вершину, сохранив остальные выключенными. Импорт .sav обновляет доступность, не переключая режим. Преобразования сырья с SAM, включая боксит → уран, выключены отдельно; обычные рецепты в Converter остаются доступны</p>`,
       );
 }
 function selectNode(node) {
@@ -1353,10 +1365,11 @@ function renderInspector() {
   const flowSections = (inputRates, outputRates) =>
     `${Object.keys(inputRates).length ? `<h4>Вход / Inputs</h4>${rows(inputRates)}` : ''}
      ${Object.keys(outputRates).length ? `<h4>Выпуск / Outputs</h4>${rows(outputRates)}` : ''}`;
+  const generator = recipe?.generator === true;
   const totalsStats = row.machines !== undefined
     ? `<div class="inspector-stats">
          <div class="mini-metric"><small>Зданий при 100% / Buildings</small><strong>${num(row.machines, 3)}</strong></div>
-         <div class="mini-metric"><small>Средняя мощность / Avg. power</small><strong>${num(row.powerMW, 1)} <span class="metric-unit">МВт</span></strong></div>
+         <div class="mini-metric"><small>${generator ? 'Выработка / Generation' : 'Потребление / Consumption'}</small><strong>${num(generator ? row.generationMW : row.powerMW, 1)} <span class="metric-unit">МВт</span></strong></div>
        </div>`
     : '';
   const totalFlows = recipe
@@ -1372,7 +1385,7 @@ function renderInspector() {
          <div class="inspector-section-heading"><h3>Одно здание<small>One building</small></h3><span class="inspector-clock">100%</span></div>
          <div class="inspector-stats">
            <div class="mini-metric"><small>Цикл / Cycle</small><strong>${num(recipe.time)} <span class="metric-unit">с</span></strong></div>
-           <div class="mini-metric"><small>Средняя мощность / Avg. power</small><strong>${num(recipe.powerMW, 1)} <span class="metric-unit">МВт</span></strong></div>
+           <div class="mini-metric"><small>${generator ? 'Выработка / Generation' : 'Потребление / Consumption'}</small><strong>${num(generator ? recipe.generationMW : recipe.powerMW, 1)} <span class="metric-unit">МВт</span></strong></div>
          </div>
          ${flowSections(recipe.inputs, recipe.outputs)}
          <p class="helper">Нормы за минуту при 100%, как в карточке здания в игре</p>
@@ -1380,7 +1393,7 @@ function renderInspector() {
     : '';
   const type =
     {
-      recipe: 'ПРОИЗВОДСТВО',
+      recipe: generator ? 'АТОМНАЯ ЭЛЕКТРОСТАНЦИЯ' : 'ПРОИЗВОДСТВО',
       resource: 'ДОБЫЧА',
       import: 'ВНЕШНЯЯ ПОСТАВКА',
       target: 'ЦЕЛЕВОЙ ВЫПУСК',
@@ -1443,7 +1456,8 @@ function exportBuild() {
       'Building RU',
       'Building EN',
       'Machine equivalents at 100%',
-      'Power MW',
+      'Consumption MW',
+      'Generation MW',
       'Outputs per minute',
     ],
   ];
@@ -1457,6 +1471,7 @@ function exportBuild() {
       building.name,
       r.machines,
       r.powerMW,
+      r.generationMW || 0,
       Object.entries(r.outputs)
         .map(([id, v]) => `${itemMap.get(id).name}: ${v}`)
         .join('; '),
@@ -1472,6 +1487,7 @@ function exportBuild() {
       b.name,
       r.machines,
       r.powerMW,
+      0,
       `${i.name}: ${r.rate}`,
     ]);
   });
@@ -1484,6 +1500,7 @@ function exportBuild() {
         `External supply: ${i.name}`,
         'Внешняя поставка',
         'External supply',
+        0,
         0,
         0,
         `${i.name}: ${r.rate}`,
@@ -1909,7 +1926,7 @@ async function main() {
     installEvents();
     if (!state.alternateModeChosen) showRecipeStart();
     $('version-badge').title =
-      `${data.meta.gameVersion}; снимок ${(data.meta.fetchedAt || '').slice(0, 10)}; ${data.recipes.length} рецептов`;
+      `${data.meta.gameVersion}; снимок ${(data.meta.fetchedAt || '').slice(0, 10)}; ${data.recipes.length} процессов`;
     await initWorker();
     await calculate();
     save();

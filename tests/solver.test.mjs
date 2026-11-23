@@ -227,7 +227,11 @@ for (const targets of [
 }
 const invalid = await solve(data, { targets: [{ item: 'Desc_IronScrew_C', rate: -1 }] });
 assert.equal(invalid.status, 'error');
-const waste = await solve(data, { ...basic, targets: [{ item: 'Desc_NuclearWaste_C', rate: 1 }] });
-assert.equal(waste.status, 'infeasible', 'Nuclear waste cannot appear as an unlimited free input');
+const waste = await solve(data, {
+  ...basic,
+  disabledRecipes: ['Recipe_UraniumWaste_C', 'Recipe_PlutoniumWaste_C'],
+  targets: [{ item: 'Desc_NuclearWaste_C', rate: 1 }],
+});
+assert.equal(waste.status, 'infeasible', 'Nuclear waste needs a reactor or an explicit supply');
 
 console.log(`PASS all solver tests; ${assertions} numeric and material-balance assertions`);

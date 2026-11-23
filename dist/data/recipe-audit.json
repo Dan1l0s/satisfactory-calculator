@@ -108,7 +108,7 @@
     "defaultPolicyReason": "This is a real late-game milestone recipe, independent of hard-drive alternates. Scarcity weighting can prefer it over direct uranium extraction. Conversion therefore requires an explicit setting; importing hard-drive unlocks alone does not establish Tier 9 progression"
   },
   "scopeNotes": [
-    "All 291 real manufacturing recipes are included; construction, hand-only crafting and generator fuel burning are outside the manufacturing scope",
+    "All 291 real manufacturing recipes are included; construction and hand-only crafting are outside the manufacturing scope; two nuclear fuel processes are verified separately in nuclearProduction",
     "Normal SatisfactoryTools Stable has 276 manufacturing recipes; its FICSMAS variant adds the same 15 seasonal manufacturing recipes present in Factory Lens",
     "SatisfactoryTools additionally synthesizes Fake_Recipe_Gift_C for the FICSMAS Gift Tree (15 gifts/min, 0 MW). Factory Lens models gifts as an external supply with a default limit of zero and does not count Gift Trees",
     "Unused variable-power fields on Singularity Cell, Biochemical Sculptor and Ballistic Warp Drive do not override their fixed-power buildings; correct values are 55, 75 and 55 MW"
@@ -275,5 +275,128 @@
     "existingRecipeRecordAlreadyMatched": true,
     "numericRecipeChangesRequired": false,
     "scope": "Recipe data only; the cause of different numbers observed in the user installation is not established by this audit"
+  },
+  "manufacturingRecipeCount": 291,
+  "totalProcessCount": 293,
+  "generatorProcessCount": 2,
+  "nuclearProduction": {
+    "checkedAt": "2026-11-23T18:07:55+00:00",
+    "matched": true,
+    "scope": "Fuel, cooling water and waste from uranium and plutonium rods at 100 percent; generated power is reported separately from consumption",
+    "generatorBuilding": {
+      "id": "Build_GeneratorNuclear_C",
+      "descriptorId": "Desc_GeneratorNuclear_C",
+      "name": "Nuclear Power Plant",
+      "nameRu": "Атомная электростанция",
+      "generatedPowerMW": 2500,
+      "waterPerMinute": 240.0,
+      "waterDerivation": "supplementalLoadRatio * powerGenerated_MW * 60 / 1000",
+      "iconSourceUrl": "https://static.satisfactory-calculator.com/img/gameStable1.0/NuclearPowerplant_256.png?v=1725286547",
+      "ownPowerConsumptionMW": 0,
+      "generationMW": 2500
+    },
+    "processes": [
+      {
+        "id": "Recipe_UraniumWaste_C",
+        "name": "Uranium Waste",
+        "nameRu": "Урановые отходы",
+        "alternate": false,
+        "buildingId": "Build_GeneratorNuclear_C",
+        "time": 300.0,
+        "unlockType": "standard",
+        "inputs": {
+          "Desc_NuclearFuelRod_C": 0.2,
+          "Desc_Water_C": 240.0
+        },
+        "outputs": {
+          "Desc_NuclearWaste_C": 10.0
+        },
+        "powerMW": 0.0,
+        "powerMinMW": 0.0,
+        "powerMaxMW": 0.0,
+        "seasonal": false,
+        "conversion": false,
+        "defaultEnabled": true,
+        "generator": true,
+        "generationMW": 2500.0
+      },
+      {
+        "id": "Recipe_PlutoniumWaste_C",
+        "name": "Plutonium Waste",
+        "nameRu": "Плутониевые отходы",
+        "alternate": false,
+        "buildingId": "Build_GeneratorNuclear_C",
+        "time": 600.0,
+        "unlockType": "standard",
+        "inputs": {
+          "Desc_PlutoniumFuelRod_C": 0.1,
+          "Desc_Water_C": 240.0
+        },
+        "outputs": {
+          "Desc_PlutoniumWaste_C": 1.0
+        },
+        "powerMW": 0.0,
+        "powerMinMW": 0.0,
+        "powerMaxMW": 0.0,
+        "seasonal": false,
+        "conversion": false,
+        "defaultEnabled": true,
+        "generator": true,
+        "generationMW": 2500.0
+      }
+    ],
+    "rawSourceDetails": {
+      "supplementalLoadRatio": 1.6,
+      "waterRateDerivation": "1.6 * 2500 MW * 60 / 1000 = 240 m3/min",
+      "uraniumEnergyMJPerRod": 750000,
+      "uraniumSecondsPerRod": 300,
+      "uraniumWastePerRod": 50,
+      "plutoniumEnergyMJPerRod": 1500000,
+      "plutoniumSecondsPerRod": 600,
+      "plutoniumWastePerRod": 10
+    },
+    "sourceMetadata": [
+      {
+        "url": "https://static.satisfactory-calculator.com/data/json/gameData/en-Stable.json",
+        "status": 200,
+        "fetchedAt": "2026-11-23T18:05:29.217185+00:00",
+        "sha256": "ad8bfbe8be16ed977936098267730f12319f01caa585896ce7e24583686b7dfe",
+        "bytes": 1548816
+      },
+      {
+        "url": "https://api.new.satisfactorytools.com/v1/versions",
+        "status": 200,
+        "fetchedAt": "2026-11-23T18:05:33.264176+00:00",
+        "sha256": "0914ad5ad479dbbe0da2da971305b96ab833367d956d1c8c6cfc646239a58161",
+        "bytes": 3370
+      },
+      {
+        "url": "https://static.satisfactory-calculator.com/data/json/gameData/ru-Stable.json",
+        "status": 200,
+        "fetchedAt": "2026-11-23T18:06:21.938154+00:00",
+        "sha256": "4d187afe3bd8fe3bf361d634339728e43ea185e04c4d2ee7e431f4b5acbdfcb3",
+        "bytes": 2367636
+      },
+      {
+        "url": "https://api.new.satisfactorytools.com/data/versions/stable-26281294.json",
+        "version": "1.2.5.0",
+        "sha256": "24899923b1beec190edc3e1d3897b228b6be7fbe72beabd4bf15a101c8d23e83",
+        "fetchedAt": "2026-11-23T17:48:50.056011+00:00"
+      }
+    ],
+    "originalDocs": {
+      "version": "1.2.3.1",
+      "sha256": "2351035c70bfe83374eefe048ec292364ff3e9867698e2477a01c3a297584a73",
+      "comparedAt": "2026-11-23T18:07:55+00:00",
+      "matched": [
+        "fuel",
+        "water",
+        "waste",
+        "time",
+        "generationMW"
+      ]
+    },
+    "externalWastePolicy": "Uranium Waste and Plutonium Waste retain external-input entries with defaultLimit=0 for saved-plan compatibility and explicit existing-plant supplies; waste cannot be extracted for free",
+    "excluded": "Ficsonium burning, other generators, automatic power-grid balancing and clock tuning are not modeled"
   }
 }

@@ -3180,6 +3180,57 @@ dialog::backdrop {
   color: #adc0ce;
   font-weight: 400;
 }
+.nuclear-energy {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr 2fr;
+  gap: 20px;
+  align-items: center;
+  margin-bottom: 18px;
+  border: 1px solid #55766a;
+  border-radius: 9px;
+  padding: 16px 20px;
+  background: #192c29;
+}
+.failure-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 15px;
+}
+.nuclear-energy[hidden] {
+  display: none;
+}
+.nuclear-energy span {
+  display: block;
+  color: #c5d9d2;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.nuclear-energy strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 23px;
+  font-variant-numeric: tabular-nums;
+}
+.nuclear-energy strong small {
+  font-size: 13px;
+  font-weight: 400;
+}
+.nuclear-energy p {
+  margin: 0;
+  color: #b8cfc6;
+  font-size: 13px;
+  line-height: 1.65;
+}
+@media (max-width: 850px) {
+  .nuclear-energy {
+    grid-template-columns: 1fr 1fr;
+  }
+  .nuclear-energy p {
+    grid-column: 1 / -1;
+  }
+}
 .recipe-candidate-list {
   display: flex;
   flex-direction: column;

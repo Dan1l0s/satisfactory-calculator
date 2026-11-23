@@ -178,12 +178,16 @@ function buildModel(data, opts) {
       Number(recipe.powerMW ?? buildings.get(recipe.buildingId)?.powerMW ?? 0) * clockPower;
     if (!finite(power) || power < 0)
       throw new Error(`Некорректная мощность рецепта ${recipe.name}`);
+    const generation = Number(recipe.generationMW ?? 0) * clockRatio;
+    if (!finite(generation) || generation < 0 || (generation > 0 && recipe.generator !== true))
+      throw new Error(`Некорректная генерация энергии в рецепте ${recipe.name}`);
     variables.push({
       name: `r${variables.length}`,
       kind: 'recipe',
       recipe,
       flow,
       power,
+      generation,
       machines: 1,
       rawCost: 0,
       limit: null,
@@ -361,6 +365,9 @@ function materialize(data, model, values, primaryOptimum, secondaryUsed) {
         clock: model.clock,
         baseEquivalent: value * model.clockRatio,
         basePowerMW: variable.power / model.clockPower,
+        baseGenerationMW: variable.generation / model.clockRatio,
+        generationMW: variable.generation * value,
+        generator: recipe.generator === true,
         powerExponent: POWER_EXPONENT,
         inputs,
         outputs,
@@ -409,6 +416,7 @@ function materialize(data, model, values, primaryOptimum, secondaryUsed) {
   const weightedResources = sum(resources.map((r) => r.rate * r.weight));
   const productionPowerMW = sum(recipes.map((r) => r.powerMW));
   const resourcePowerMW = sum(resources.map((r) => r.powerMW));
+  const generationMW = sum(recipes.map((r) => r.generationMW));
   const machines = sum(recipes.map((r) => r.machines)) + sum(resources.map((r) => r.machines));
   const buildings = sum(recipes.map((r) => r.buildings)) + sum(resources.map((r) => r.buildings));
   // Balanced recycling loops can still need an initial stock in the game
@@ -468,8 +476,12 @@ function materialize(data, model, values, primaryOptimum, secondaryUsed) {
     warnings.push(
       'Дробные машины означают эквивалентную загрузку при выбранной частоте. Оптимизируется эта загрузка; подбор целого числа зданий и индивидуальных частот не выполняется. Мощность: средняя при такой загрузке',
     );
+  if (generationMW > EPS)
+    warnings.push(
+      'Ядерные реакторы обеспечивают отходы для переработки. Их генерация показана отдельно; цель «Энергия» минимизирует потребление производства и добычи, без вычитания генерации',
+    );
   warnings.push(
-    'Не учтены логистика, насосы, освещение, усилители Somersloop и собственная генерация энергии',
+    'Не учтены логистика, насосы, освещение, усилители Somersloop и генерация других электростанций',
   );
   const totalPower = productionPowerMW + resourcePowerMW;
   const value =
@@ -500,6 +512,8 @@ function materialize(data, model, values, primaryOptimum, secondaryUsed) {
       resourceRate,
       weightedResources,
       powerMW: totalPower,
+      generationMW,
+      netPowerMW: totalPower - generationMW,
       productionPowerMW,
       resourcePowerMW,
       powerMinMW,
